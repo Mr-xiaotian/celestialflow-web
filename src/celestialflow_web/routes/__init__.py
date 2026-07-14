@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from . import pull_routes, push_routes
+from . import core_pull, core_push
 
 if TYPE_CHECKING:
     from ..server.core_server import TaskWebServer
@@ -27,7 +27,7 @@ def create_router(server: TaskWebServer) -> APIRouter:
         return server.templates.TemplateResponse(request=request, name="index.html")
 
     # 子模块路由
-    pull_routes.register(router, server)
-    push_routes.register(router, server, server.config_path)
+    core_pull.register(router, server)
+    core_push.register(router, server, server.config_path)
 
     return router
