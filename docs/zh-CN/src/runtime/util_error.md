@@ -1,8 +1,10 @@
 # util_error
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/07/14
 
-Web 模块的错误查询、过滤与分页工具函数。
+当前文件仅保留一个独立的错误查询参数归一化函数定义。
+
+> ⚠️ **说明**：当前源码里 `routes/core_pull.py` 实际从 `runtime.util_cal` 导入 `normalize_errors_query()`；`runtime.util_error.py` 中的同名实现目前未被路由直接引用。文档此处仅描述本文件自身代码，不推断其调用关系。
 
 ## normalize_errors_query
 
@@ -25,7 +27,7 @@ def normalize_errors_query(
 ### normalize_errors_query 用法示例
 
 ```python
-from celestialflow.web.util_error import normalize_errors_query
+from celestialflow_web.runtime.util_error import normalize_errors_query
 
 # 归一化查询参数
 page, page_size, node, keyword, sort_order = normalize_errors_query(

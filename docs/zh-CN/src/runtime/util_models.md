@@ -1,10 +1,10 @@
 # util_models
 
-> 📅 最后更新日期: 2026/06/28
+> 📅 最后更新日期: 2026/07/14
 
 ## 作用
 
-`celestialflow.web.util_models` 模块定义了 Web 模块使用的全部 Pydantic 数据模型，用于数据校验、序列化和 API 请求/响应类型约束。
+`celestialflow_web.runtime.util_models` 模块定义了 Web 模块使用的全部 Pydantic 数据模型，用于数据校验、序列化和 API 请求/响应类型约束。
 
 ## 模型列表
 
@@ -151,7 +151,7 @@ Web UI 全局配置模型（嵌套分组结构）。
 ### 数据校验与序列化
 
 ```python
-from celestialflow.web.util_models import (
+from celestialflow_web.runtime.util_models import (
     WebConfigModel, GlobalConfigModel, DashboardPageConfigModel,
     DashboardConfigModel, ErrorsPageConfigModel, InjectionPageConfigModel,
     TaskInjectionModel,
@@ -208,7 +208,7 @@ for node_name, tasks in injection.root.items():
 ### 错误数据处理
 
 ```python
-from celestialflow.web.util_models import ErrorsModel
+from celestialflow_web.runtime.util_models import ErrorsModel
 
 # 错误内容
 content = ErrorsModel(

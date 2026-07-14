@@ -1,6 +1,6 @@
 # TaskWebServer（core_server）
 
-> 📅 最后更新日期: 2026/06/28
+> 📅 最后更新日期: 2026/07/14
 
 TaskWeb 模块提供了一个基于 FastAPI 的轻量级 Web 服务器，用于实时监控和管理任务图的运行。它充当了 `TaskReporter` (后端) 与 Web UI (前端) 之间的中转站。
 
@@ -33,7 +33,7 @@ celestialflow-web --log-level debug
 ### 代码中启动
 
 ```python
-from celestialflow import TaskWebServer
+from celestialflow_web import TaskWebServer
 
 server = TaskWebServer(host="127.0.0.1", port=5005, log_level="info")
 server.start_server()
@@ -193,7 +193,7 @@ class WebConfigModel(BaseModel):
 
 ## 配置管理
 
-Web 服务的配置持久化保存在 `web/config.json`。
+Web 服务的配置持久化保存在包内的 `src/celestialflow_web/config.json`。
 
 - `load_config()` — 启动时读取并通过 `WebConfigModel` 验证；若 `config.json` 不存在，直接抛出 `ConfigurationError`，不会使用硬编码默认值启动。
 - `save_config(config, config_path)` — 保存配置到 JSON 文件，线程安全（由上层 `push_config` 路由中的 `config_lock` 保证）

@@ -1,30 +1,42 @@
 # Web 模块
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/07/14
 
-Web 模块提供了一个交互式的监控和管理界面，基于 FastAPI 与原生 TypeScript 构建，支持任务状态实时可视化、错误追溯、动态任务注入及全局配置管理。
+`celestialflow_web` 包提供 CelestialFlow 的独立 Web 监控界面，基于 FastAPI 与原生 TypeScript 构建，支持任务状态可视化、错误追踪、任务注入和前端配置持久化。
 
 ## 模块概述
 
-Web 模块充当了 `TaskReporter` 与最终用户之间的桥梁。它一方面作为 RESTful API Server 接收并缓存来自运行时的状态快照；另一方面提供高性能、低延迟的单页应用 (SPA)，让开发者能够直观地观察图任务的执行流向、性能瓶颈及异常详情。
+包根目前只导出一个公开对象：
+
+| 导出符号 | 来源 | 说明 |
+|---------|------|------|
+| `TaskWebServer` | `celestialflow_web.server.core_server` | FastAPI Web 服务入口类 |
+
+运行时结构已经拆分为三个后端子包：
+
+| 子包 | 作用 |
+|------|------|
+| `server/` | 服务入口与应用生命周期管理 |
+| `runtime/` | 配置、模型、SQLite 和参数归一化工具 |
+| `routes/` | Pull / Push 路由注册 |
 
 ## 文件说明
 
 ### 核心后端组件
 
-1. **core_server.py** (`TaskWebServer`)
+1. **server/core_server.py** (`TaskWebServer`)
    - **作用**: Web 核心服务器，管理数据缓存、版本控制（known_rev）与 API 路由。
    - **关键功能**: 状态聚合、配置持久化、错误分页查询、任务注入中转。
 
-2. **util_error.py**
-   - **作用**: 提供错误日志的过滤、归一化与分页逻辑。
+2. **routes/**
+   - **作用**: 组装主页、Pull API 和 Push API。
 
-3. **util_config.py**
-   - **作用**: 负责 `config.json` 的读写，支持配置降级启动。
+3. **runtime/**
+   - **作用**: 提供 `config.json` 读写、Pydantic 模型、SQLite 操作与参数归一化工具。
 
 ### 核心前端组件
 
-前端 TypeScript 源文件位于 `web/static/ts/`，编译为 JS 后由 `templates/index.html` 加载：
+前端 TypeScript 源文件位于 `src/celestialflow_web/static/ts/`，编译为 JS 后由 `templates/index.html` 加载：
 
 1. **main.ts** — 全局入口与轮询协调
 2. **utils.ts** — 通用工具函数
@@ -47,8 +59,8 @@ Web 模块充当了 `TaskReporter` 与最终用户之间的桥梁。它一方面
 ### 增量拉取机制
 所有拉取接口（`pull_*`）均支持 `known_rev` 机制。只有当后端数据版本发生变化时才会传输实际 Payload，否则仅返回版本号，极大节省了轮询带宽。
 
-### 配置降级启动
-系统设计了健壮的初始化流程：若后端配置加载失败，前端会自动回退到内置的 `DEFAULT_WEB_CONFIG`，保证监控面板在任何情况下都能正常渲染并显示基础数据。
+### 配置持久化
+后端启动时会读取包内的 `config.json` 并通过 `WebConfigModel` 校验；前端修改设置后，后端会将最新配置写回同一文件。
 
 ## 使用模式
 
@@ -73,7 +85,7 @@ requests.post("http://localhost:5000/api/push_injection_tasks", json={
 ### 创建和启动 TaskWebServer 的基本示例
 
 ```python
-from celestialflow import TaskWebServer
+from celestialflow_web import TaskWebServer
 
 # 创建服务器实例
 server = TaskWebServer(
@@ -88,13 +100,15 @@ server.start_server()
 
 启动后浏览器访问 `http://127.0.0.1:5000` 即可看到 Web UI 监控面板。
 
-### 完整的数据上报链路示例
+### 与 CelestialFlow 运行时协作示例
 
 ```python
-from celestialflow import TaskGraph, TaskStage, TaskWebServer
+from celestialflow import TaskGraph, TaskStage
 from celestialflow.persistence import LogInlet
 from celestialflow.observability import TaskReporter
 import asyncio
+
+from celestialflow_web import TaskWebServer
 
 
 async def main():

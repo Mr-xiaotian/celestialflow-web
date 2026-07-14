@@ -1,6 +1,6 @@
 # index.html
 
-> 📅 最后更新日期: 2026/06/18
+> 📅 最后更新日期: 2026/07/14
 
 Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
 
@@ -123,7 +123,7 @@ http://127.0.0.1:5000
 celestialflow-web
 
 # 或在 Python 中启动
-python -c "from celestialflow import TaskWebServer; TaskWebServer(host='127.0.0.1', port=5000).start_server()"
+python -c "from celestialflow_web import TaskWebServer; TaskWebServer(host='127.0.0.1', port=5000).start_server()"
 ```
 
 浏览器打开后可见三个标签页：
@@ -175,7 +175,7 @@ python -c "from celestialflow import TaskWebServer; TaskWebServer(host='127.0.0.
 
 #### 添加自定义 CSS
 
-将自定义样式文件放入 `web/static/css/` 目录，并在 `index.html` 中引入：
+将自定义样式文件放入 `src/celestialflow_web/static/css/` 目录，并在 `index.html` 中引入：
 
 ```html
 <link rel="stylesheet" href="static/css/custom.css">

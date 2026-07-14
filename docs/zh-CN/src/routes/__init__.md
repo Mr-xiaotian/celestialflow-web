@@ -1,10 +1,17 @@
 # Web 路由组装入口
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/07/14
 
 ## 作用
 
-`__init__.py`（即 `celestialflow.web.routes` 包入口）是整个 Web API 路由的组装起点。它创建一个 `APIRouter` 并将 **Pull**（数据拉取）和 **Push**（数据推送）两个子路由模块注册进去，同时注册根路径的页面入口。
+`__init__.py`（即 `celestialflow_web.routes` 包入口）是整个 Web API 路由的组装起点。它创建一个 `APIRouter` 并将 **Pull**（数据拉取）和 **Push**（数据推送）两个子路由模块注册进去，同时注册根路径的页面入口。
+
+按当前目录结构，拉取与推送实现文件分别位于：
+
+| 文件 | 作用 |
+|------|------|
+| `core_pull.py` | 注册全部 GET 拉取端点 |
+| `core_push.py` | 注册全部 POST 推送端点 |
 
 ## 核心函数
 
@@ -21,8 +28,8 @@
 | 路径 | 方法 | 说明 |
 |------|------|------|
 | `/` | `GET` | 页面入口，返回 `templates/index.html` |
-| `/api/pull_*` | `GET` | 由 `pull_routes.register()` 注册的全部拉取端点 |
-| `/api/push_*` | `POST` | 由 `push_routes.register(router, server, config_path)` 注册的全部推送端点 |
+| `/api/pull_*` | `GET` | 由 Pull 路由模块注册的全部拉取端点 |
+| `/api/push_*` | `POST` | 由 Push 路由模块注册的全部推送端点 |
 
 **注册顺序：**
 
@@ -41,8 +48,8 @@
 ## 使用示例
 
 ```python
-from celestialflow.web.routes import create_router
-from celestialflow.web.core_server import TaskWebServer
+from celestialflow_web.routes import create_router
+from celestialflow_web.server.core_server import TaskWebServer
 
 server = TaskWebServer(...)
 router = create_router(server)
