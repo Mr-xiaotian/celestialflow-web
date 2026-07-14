@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse
 from . import pull_routes, push_routes
 
 if TYPE_CHECKING:
-    from ..core_server import TaskWebServer
+    from ..server.core_server import TaskWebServer
 
 
 def create_router(server: TaskWebServer) -> APIRouter:

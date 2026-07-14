@@ -3,7 +3,7 @@ import json
 import os
 from typing import Any
 
-from ..runtime.util_errors import ConfigurationError
+from .util_errors import ConfigurationError
 
 
 def load_config(config_path: str) -> dict[str, Any]:

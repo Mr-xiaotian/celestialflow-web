@@ -1,4 +1,4 @@
-# web/util_error.py
+"""错误查询参数归一化工具。"""
 
 
 def normalize_errors_query(

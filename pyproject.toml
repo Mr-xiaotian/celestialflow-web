@@ -1,23 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "celestialflow-web"
 version = "0.1.0"
-description = "Add your description here"
+description = "CelestialFlow Web UI for task graph monitoring and control."
 readme = "README.md"
-requires-python = ">=3.14"
+license-files = []
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.139.0",
     "jinja2>=3.1.6",
+    "pydantic>=2.0.0",
     "uvicorn>=0.51.0",
 ]
 
 [project.scripts]
-celestialflow-web = "celestialflow-web.core_server:main_entry"
+celestialflow-web = "celestialflow_web.server.core_server:main_entry"
 
-[tool.setuptools]
-license-files = []
+[dependency-groups]
+dev = [
+    "build>=1.2.2.post1",
+    "httpx2>=0.28.1",
+    "twine>=6.1.0",
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
-celestialflow = [
+celestialflow_web = [
     "templates/**/*.html",
     "static/**/*",
     "config.json"

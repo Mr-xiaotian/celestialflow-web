@@ -19,11 +19,11 @@ from fastapi.templating import (
     Jinja2Templates,
 )
 
-from .routes import create_router
-from .util_cal import cal_interval
-from .util_config import load_config
-from .util_models import WebConfigModel
-from .util_sqlite import (
+from ..routes import create_router
+from ..runtime.util_cal import cal_interval
+from ..runtime.util_config import load_config
+from ..runtime.util_models import WebConfigModel
+from ..runtime.util_sqlite import (
     append_records,
     clear_records,
     connect_db,
@@ -33,11 +33,11 @@ from .util_sqlite import (
     query_records,
 )
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(PACKAGE_DIR, "config.json")
 
-static_path = os.path.join(BASE_DIR, "static")
-templates_path = os.path.join(BASE_DIR, "templates")
+static_path = os.path.join(PACKAGE_DIR, "static")
+templates_path = os.path.join(PACKAGE_DIR, "templates")
 
 
 class TaskWebServer:

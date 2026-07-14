@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter
 
-from ..util_error import normalize_errors_query
+from ..runtime.util_error import normalize_errors_query
 
 if TYPE_CHECKING:
-    from ..core_server import TaskWebServer
+    from ..server.core_server import TaskWebServer
 
 
 def register(router: APIRouter, server: TaskWebServer) -> None:
