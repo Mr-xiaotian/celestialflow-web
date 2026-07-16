@@ -8,6 +8,7 @@ def cal_interval(refresh_interval: int) -> float:
     """
     return max(1.0, min(float(refresh_interval) / 1000.0, 60.0))
 
+
 def normalize_errors_query(
     page: int, page_size: int, node: str, keyword: str, sort_order: str
 ) -> tuple[int, int, str, str, str]:

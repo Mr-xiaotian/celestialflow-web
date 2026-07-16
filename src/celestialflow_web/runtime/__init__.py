@@ -13,13 +13,13 @@ from .util_sqlite import (
 )
 
 __all__ = [
-    "cal_interval",
-    "load_config",
     "WebConfigModel",
     "append_records",
+    "cal_interval",
     "clear_records",
     "connect_db",
     "get_max_event_id_in_fail",
+    "load_config",
     "load_records",
     "query_error_type_counts",
     "query_records",

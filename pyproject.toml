@@ -42,7 +42,7 @@ celestialflow_web = [
 
 [tool.pyright]
 include = ["src"]
-exclude = ["tests"]
+ignore = ["tests"]
 
 typeCheckingMode = "strict"
 reportUnusedFunction = "none"
