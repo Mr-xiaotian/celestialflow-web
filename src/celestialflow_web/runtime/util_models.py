@@ -1,5 +1,4 @@
-"""Pydantic 模型定义。"""
-
+# runtime/util_models.py
 from __future__ import annotations
 
 from typing import Any

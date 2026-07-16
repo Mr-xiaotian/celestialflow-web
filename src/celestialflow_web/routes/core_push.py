@@ -1,5 +1,4 @@
-"""Push 路由（POST）：Reporter 推送状态、错误、结构等。"""
-
+# routes/core_push.py
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
@@ -60,7 +59,7 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         data: TaskInjectionModel,
     ) -> dict[str, bool] | JSONResponse:
         """
-        将前端提交的注入任务追加到待执行队列。
+        将前端提交的注入任务按节点覆盖写入待执行队列。
 
         :param data: 注入任务数据
         :return: {"ok": True} 或 JSONResponse({"ok": False, "msg": ...}, 500)
@@ -103,7 +102,7 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         更新图结构数据并递增版本号。
 
         :param data: 图结构数据
-        :return: {"ok": True}
+        :return: {"ok": True} 或 {"ok": False}（非当前 graph 时）
         """
         if not server.is_current_graph(data.graph_id):
             return {"ok": False}
@@ -116,7 +115,7 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         更新图分析信息并递增版本号。
 
         :param data: 图分析数据
-        :return: {"ok": True}
+        :return: {"ok": True} 或 {"ok": False}（非当前 graph 时）
         """
         if not server.is_current_graph(data.graph_id):
             return {"ok": False}
@@ -129,7 +128,7 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         更新各节点运行状态并递增版本号。
 
         :param data: 节点状态数据
-        :return: {"ok": True}
+        :return: {"ok": True} 或 {"ok": False}（非当前 graph 时）
         """
         if not server.is_current_graph(data.graph_id):
             return {"ok": False}
@@ -142,7 +141,7 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         直接接收错误日志列表并存储。
 
         :param data: 错误内容数据
-        :return: {"ok": True}
+        :return: {"ok": True} 或 {"ok": False}（非当前 graph 时）
         """
         if not server.is_current_graph(data.graph_id):
             return {"ok": False}

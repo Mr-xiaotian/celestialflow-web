@@ -1,5 +1,4 @@
-"""Pull 路由（GET）：客户端拉取状态、结构、配置等。"""
-
+# routes/core_pull.py
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any

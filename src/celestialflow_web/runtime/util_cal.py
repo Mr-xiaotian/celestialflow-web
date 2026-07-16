@@ -1,4 +1,4 @@
-# web/util_cal.py
+# runtime/util_cal.py
 def cal_interval(refresh_interval: int) -> float:
     """
     将毫秒刷新间隔换算为秒，并限制在 [1, 60] 范围内。

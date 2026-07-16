@@ -1,3 +1,4 @@
+# tests/test_server.py
 def test_store_snapshot_methods_return_isolated_copies(web_server):
     """测试 server 快照接口：返回值不应与内部 store 共享可变引用"""
     raw_status = {"s1": {"tasks_succeeded": 1, "total_remaining_time": 2.0}}

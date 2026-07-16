@@ -1,4 +1,4 @@
-# web/util_config.py
+# runtime/util_config.py
 import json
 import os
 from typing import Any

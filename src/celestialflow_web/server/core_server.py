@@ -1,4 +1,4 @@
-# web/core_server.py
+# server/core_server.py
 from __future__ import annotations
 
 import argparse
@@ -75,6 +75,8 @@ class TaskWebServer:
         self.injection_tasks: dict[str, list[Any]] = {}  # 存储前端注入任务
         self.injection_terminations: set[str] = set()  # 存储前端注入终止符
         self.current_graph_id: str = ""
+        # 使用 mkstemp 手动管理文件描述符，避免 NamedTemporaryFile
+        # 在 Windows 上的自动删除与文件重打开冲突
         fd, records_db_path = tempfile.mkstemp(
             prefix="celestialflow-web-records-", suffix=".sqlite3"
         )
@@ -274,10 +276,10 @@ class TaskWebServer:
 
     def get_server_state(self, graph_id: str) -> dict[str, Any]:
         """
-        读取 reporter 同步决策所需的服务端状态。
+        同步 graph 上下文并返回 reporter 同步决策所需的服务端状态。
 
-        如果调用方传入 ``graph_id``，server 会先同步 graph 上下文，再返回
-        当前 graph 对应的结构、分析和错误缓存摘要。
+        该方法会先调用 ``sync_graph_context`` 切换 graph 上下文（有副作用），
+        再返回当前 graph 对应的结构、分析和错误缓存摘要。
 
         :param graph_id: reporter 当前任务图实例的唯一标识
         :return: 服务端同步状态摘要字典
