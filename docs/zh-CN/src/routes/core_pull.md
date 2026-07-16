@@ -1,6 +1,6 @@
 # Pull 路由（GET）— `core_pull`
 
-> 📅 最后更新日期: 2026/07/14
+> 最后更新日期: 2026/07/16
 
 ## 作用
 
@@ -10,7 +10,7 @@
 
 ### `register(router: APIRouter, server: TaskWebServer) -> None`
 
-在给定的 `APIRouter` 上注册全部 7 个 GET 端点。
+在给定的 `APIRouter` 上注册全部 8 个 GET 端点。
 
 | 参数 | 类型 | 说明 |
 |------|------|------|

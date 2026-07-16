@@ -1,6 +1,6 @@
 # Web 模块
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/07/16
 
 `celestialflow_web` 包提供 CelestialFlow 的独立 Web 监控界面，基于 FastAPI 与原生 TypeScript 构建，支持任务状态可视化、错误追踪、任务注入和前端配置持久化。
 
@@ -74,7 +74,7 @@ celestialflow-web --port 5000
 ```python
 import requests
 
-# 注入新任务到指定节点（格式：{节点名: [任务列表]}）
+# 向指定节点覆盖写入待注入任务（格式：{节点名: [任务列表]}）
 requests.post("http://localhost:5000/api/push_injection_tasks", json={
     "Stage_A": [{"id": 1, "data": "payload"}]
 })

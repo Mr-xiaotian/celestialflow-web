@@ -1,10 +1,10 @@
 # main.ts
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/07/16
 
 仪表盘主入口脚本，负责协调全局初始化、事件监听及核心数据轮询逻辑。
 
-> ⚠️ **已变更**: 旧版文档提及的 `loadSummary()` 和 `initSortableDashboard()` 已移除。`refreshAll()` 现并行 4 个请求（statuses、structure、errors、analysis），summary 由 `renderSummary()` 直接基于 `nodeStatuses` 前端聚合。新增了 `updateCurrentPageSettings()`、`activateTab()` 等设置面板管理函数。
+> ⚠️ **已变更**: `refreshAll()` 现并行 5 个请求（statuses、structure、errors、analysis、errorTypeCounts），其中 `loadErrorTypeCounts()` 为新增的错误类型聚合拉取。对应新增了 `renderErrorTypeChart()` 渲染分支和 `populateErrorTypeNodeFilter()` 筛选器填充。
 
 ## 全局变量
 
@@ -43,7 +43,7 @@
 
 ### 轮询刷新 (`refreshAll`)
 
-并行发起 4 个异步请求：`loadStatuses()`、`loadStructure()`、`loadErrors()`、`loadAnalysis()`。根据各模块返回的变更标志，按需触发 DOM 渲染。
+并行发起 5 个异步请求：`loadStatuses()`、`loadStructure()`、`loadErrors()`、`loadAnalysis()`、`loadErrorTypeCounts()`。根据各模块返回的变更标志，按需触发 DOM 渲染。
 
 ```mermaid
 flowchart TD
@@ -51,9 +51,11 @@ flowchart TD
     RA --> LST[loadStructure]
     RA --> LE[loadErrors]
     RA --> LA[loadAnalysis]
+    RA --> LET[loadErrorTypeCounts]
 
     LS -->|statusesChanged| RD[renderDashboard]
     LS -->|statusesChanged| PN[populateNodeFilter]
+    LS -->|statusesChanged| PN2[populateErrorTypeNodeFilter]
     LS -->|statusesChanged| RI[renderInjectionPage]
     LS -->|statusesChanged| UC[updateChartData]
     LS -->|statusesChanged| RS[renderSummary]
@@ -64,6 +66,8 @@ flowchart TD
     LE -->|errorsChanged| RE[renderErrors]
 
     LA -->|analysisChanged| RAI[renderAnalysisInfo]
+
+    LET -->|errorTypeCountsChanged| RET[renderErrorTypeChart]
 ```
 
 ### 设置交互
@@ -119,12 +123,14 @@ flowchart TD
     RA --> J["loadStructure()"]
     RA --> K["loadErrors()"]
     RA --> L["loadAnalysis()"]
+    RA --> M["loadErrorTypeCounts()"]
 
     I --> N["statusesChanged?"]
     N -->|true| O["renderDashboard()"]
     N -->|true| P["renderInjectionPage()"]
     N -->|true| Q["updateChartData()"]
     N -->|true| R["renderSummary()"]
+    N -->|true| P2["populateErrorTypeNodeFilter()"]
 
     J --> S["structureChanged?"]
     S -->|true| T["renderMermaidStructure()"]
@@ -134,6 +140,9 @@ flowchart TD
 
     L --> W["analysisChanged?"]
     W -->|true| X["renderAnalysisInfo()"]
+
+    M --> Y["errorTypeCountsChanged?"]
+    Y -->|true| Z["renderErrorTypeChart()"]
 ```
 
 ## 使用示例

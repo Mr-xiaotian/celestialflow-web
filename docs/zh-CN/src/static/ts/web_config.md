@@ -1,6 +1,6 @@
 # web_config.ts
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/07/16
 
 管理 Web 前端的配置加载、归一化、保存和应用。配置采用**分组结构**（`global`、`dashboard`、`errors`、`injection`），同时兼容旧版扁平格式的自动迁移。
 
@@ -68,8 +68,8 @@ type LegacyWebConfig = {
 | `saveConfigPending` | `boolean` | 是否还有新的配置变更等待落盘 |
 | `saveConfigPromise` | `Promise<boolean> \| null` | 当前正在执行的保存队列 Promise |
 | `PANEL_SELECTOR_MAP` | `Record<DashboardColumnKey, string>` | 面板键到 CSS 选择器的映射 |
-| `CARD_TEMPLATES` | `Record<string, string>` | 卡片 ID 到 HTML 模板的映射（mermaid, analysis, status, progress, summary） |
-| `CARD_META` | `Record<string, string>` | 卡片 ID 到 i18n 标签键的映射 |
+| `CARD_TEMPLATES` | `Record<string, string>` | 卡片 ID 到 HTML 模板的映射（mermaid, analysis, status, progress, error-types, summary） |
+| `CARD_META` | `Record<string, string>` | 卡片 ID 到 i18n 标签键的映射（含 error-types） |
 | `ALL_CARD_IDS` | `string[]` | 由 `Object.keys(CARD_TEMPLATES)` 自动生成的标准卡片 ID 列表 |
 | `DEFAULT_WEB_CONFIG` | `WebConfig` | 默认配置模板，用于初始化和降级兜底 |
 
@@ -152,7 +152,7 @@ const DEFAULT_WEB_CONFIG: WebConfig = {
     layout: {
       left: ["mermaid", "analysis"],
       middle: ["status"],
-      right: ["progress", "summary"],
+      right: ["progress", "error-types", "summary"],
     },
   },
   errors: {

@@ -1,6 +1,6 @@
 # globals.d.ts
 
-> 📅 最后更新日期: 2026/06/18
+> 📅 最后更新日期: 2026/07/16
 
 TypeScript 全局类型声明文件，为 CDN 引入的第三方库（Chart.js、Sortable.js）、全局变量、跨模块共享函数以及后端 API 响应结构提供完整类型定义。
 
@@ -31,6 +31,13 @@ type ErrorsPullResponse = {
   sort_order: "newest" | "oldest";
   data: ErrorData[] | null;
 };
+
+type ErrorTypeCount = {
+  error_type: string; // 错误类型名称
+  count: number;      // 该类型的错误条数
+};
+
+type ErrorTypeCountsPullResponse = ApiVersionedResponse<ErrorTypeCount[]>;
 ```
 
 ## 仪表盘布局类型
@@ -48,8 +55,10 @@ type ChartPoint = { x: number; y: number };
 
 type ChartDataset = {
   label: string;
-  data: ChartPoint[];
-  borderColor?: string;
+  data: ChartPoint[] | number[];
+  borderColor?: string | string[];
+  backgroundColor?: string | string[];
+  borderWidth?: number;
   fill?: boolean;
   tension?: number;
   hidden?: boolean;
@@ -75,13 +84,15 @@ type ChartOptions = {
   animation: boolean;
   responsive: boolean;
   plugins: {
-    legend: {
-      labels: { color: string };
-      onClick: (event: Event, legendItem: ChartLegendItem, legend: { chart: ChartInstance }) => void;
+    legend?: {
+      display?: boolean;
+      labels?: { color: string };
+      onClick?: (event: Event, legendItem: ChartLegendItem, legend: { chart: ChartInstance }) => void;
     };
   };
-  interaction: { intersect: boolean; mode: string };
-  scales: { x: ChartScaleConfig; y: ChartScaleConfig };
+  interaction?: { intersect: boolean; mode: string };
+  scales?: { x: ChartScaleConfig; y: ChartScaleConfig };
+  cutout?: string;
 };
 
 interface ChartInstance {
@@ -167,6 +178,7 @@ flowchart LR
             STR[StructurePullResponse]
             APR[AnalysisPullResponse]
             EPR[ErrorsPullResponse]
+            ETCR[ErrorTypeCountsPullResponse]
         end
         subgraph "Chart.js"
             CPT[ChartPoint]
@@ -196,6 +208,7 @@ flowchart LR
         DST[dashboard_structure.ts]
         DA[dashboard_analysis.ts]
         ER[errors.ts]
+        DET[dashboard_error_types.ts]
         INJ[injection.ts]
         LE[layout_editor.ts]
     end
@@ -205,6 +218,7 @@ flowchart LR
     STR --> DST
     APR --> DA
     EPR --> ER
+    ETCR --> DET
     PIDE --> ER
     PIDE --> INJ
     SL --> I

@@ -1,6 +1,6 @@
 # Push 路由（POST）— `core_push`
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/07/16
 
 ## 作用
 
@@ -44,8 +44,9 @@ flowchart LR
 接收前端任务注入请求，请求体为 `TaskInjectionModel`，格式为 `{node_name: [tasklist]}`。
 
 - 逐节点写入 `server.injection_tasks`
-- 同一节点的新任务列表会覆盖旧值
+- 同一节点的新任务列表会覆盖旧值（**按节点覆盖**，非追加）
 - 整个写入过程由 `task_injection_lock` 保护
+- 失败时返回 `JSONResponse({"ok": False, "msg": ...}, 500)`
 
 ### 3. `POST /api/push_injection_terminations`
 
@@ -53,6 +54,7 @@ flowchart LR
 
 - 写入 `server.injection_terminations`
 - 采用集合语义，重复节点会自动去重
+- 失败时返回 `JSONResponse({"ok": False, "msg": ...}, 500)`
 
 ### 4. `POST /api/push_structure`
 

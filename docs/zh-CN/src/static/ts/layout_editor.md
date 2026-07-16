@@ -1,6 +1,6 @@
 # 卡片布局编辑器 — `layout_editor`
 
-> 📅 最后更新日期: 2026/05/28
+> 📅 最后更新日期: 2026/07/16
 
 ## 作用
 
@@ -20,7 +20,7 @@
 const DEFAULT_LAYOUT = {
   left:   ["mermaid", "analysis"],
   middle: ["status"],
-  right:  ["progress", "summary"],
+  right:  ["progress", "error-types", "summary"],
 };
 ```
 
@@ -28,7 +28,7 @@ const DEFAULT_LAYOUT = {
 |------|----------|------|
 | `left` | mermaid, analysis | 图渲染 + 拓扑分析 |
 | `middle` | status | 节点状态表格 |
-| `right` | progress, summary | 进度 + 全局汇总 |
+| `right` | progress, error-types, summary | 进度 + 错误类型分布 + 全局汇总 |
 
 ---
 

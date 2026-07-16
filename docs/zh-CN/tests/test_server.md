@@ -1,6 +1,6 @@
 # Web 服务 API 测试 (test_server.py)
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/07/16
 
 ## 作用
 
@@ -35,6 +35,11 @@
 - `test_task_injection_requires_tasklist_mapping`: 验证非法 payload（非列表值）返回 422。
 - `test_termination_injection_requires_string_array`: 验证终止符注入接口要求请求体为字符串数组，否则返回 422。
 
+### 错误类型聚合
+- `test_get_error_type_counts_returns_grouped_stats`: 验证全节点错误类型聚合统计，返回按 `error_type` 分组的计数。
+- `test_get_error_type_counts_supports_node_filter`: 验证按节点（`stage`）过滤的错误类型聚合。
+- `test_pull_error_type_counts`: 验证 `/api/pull_error_type_counts` HTTP 端点支持全节点聚合、单节点过滤，以及 `known_rev` 缓存命中返回 `data: null`。
+
 ### 错误管理
 - `test_errors_pagination`:
   - 验证错误记录的批量推送。
@@ -67,6 +72,9 @@
 | `test_push_errors_duplicate_append_is_idempotent` | 重复推送幂等 |
 | `test_newer_graph_replaces_previous_graph_context` | 新图上下文切换 |
 | `test_stale_graph_pushes_are_ignored` | 过期推送忽略 |
+| `test_get_error_type_counts_returns_grouped_stats` | 全节点错误类型聚合 |
+| `test_get_error_type_counts_supports_node_filter` | 按节点过滤错误类型聚合 |
+| `test_pull_error_type_counts` | 错误类型聚合 API（缓存命中） |
 
 ## 测试重点
 
@@ -75,6 +83,8 @@
 - **任务一致性**: 确保注入的任务在拉取消费后被正确清除，防止重复处理。
 - **快照隔离**: 确保前端获取的数据不会因为内部状态突变而产生不一致。
 - **参数校验**: 验证注入接口对非法 payload 返回 422，避免下游处理错误数据。
+- **错误类型聚合**: 验证 `/api/pull_error_type_counts` 能按 `error_type` 分组统计，支持全节点和按节点过滤，并与 Rev 机制配合实现缓存命中。
+- **工具方法**: `get_error_type_counts` 是 server 层的纯工具方法，返回值可直接用于仪表盘展示错误分布。
 
 ## 运行方式
 
@@ -93,6 +103,9 @@ pytest tests/test_server.py -k "errors" -v
 
 # 仅运行配置拉取测试
 pytest tests/test_server.py -k "config" -v
+
+# 仅运行错误类型聚合测试
+pytest tests/test_server.py -k "error_type" -v
 ```
 
 ## 重要细节

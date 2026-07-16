@@ -1,8 +1,10 @@
 # index.html
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/07/16
 
 Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
+
+> ⚠️ **已变更**: 仪表盘右栏新增错误类型分布卡片（`.error-types-card`），JS 脚本加载顺序新增 `dashboard_error_types.js`。
 
 ## 整体布局
 
@@ -47,6 +49,7 @@ Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
 | 卡片 | Class | 说明 |
 |------|-------|------|
 | 节点指标走向 | `.progress-card` | 支持指标切换（完成/成功/错误/重复/等待）的历史折线图 |
+| 错误类型分布 | `.error-types-card` | 按节点筛选的错误类型 doughnut 图与图例 |
 | 总体状态摘要 | `.summary-card` | 全局 6 格统计看板 |
 
 ## 外部依赖（CDN）
@@ -69,6 +72,7 @@ dashboard_statuses.js ← 节点状态管理
 dashboard_structure.js← 结构图渲染
 errors.js             ← 错误日志分页
 dashboard_analysis.js ← 拓扑分析展示
+dashboard_error_types.js ← 错误类型分布卡片
 dashboard_summary.js  ← 汇总统计
 dashboard_history.js  ← 历史图表
 injection.js          ← 任务注入逻辑
