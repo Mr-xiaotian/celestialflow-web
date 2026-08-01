@@ -90,11 +90,11 @@ function renderErrors() {
             const index = (currentPage - 1) * pageSize + i + 1; // 全局展示序号
             const row = document.createElement("tr"); // 当前表格行
             const errorText = `${e.error_type}(${e.error_message})`; // 错误完整文本
-            const errorRepr = format_repr(errorText, 40); // 表格中展示的截断错误文本
+            const errorRepr = format_repr(errorText, 30); // 表格中展示的截断错误文本
             const taskText = typeof e.task_json === "string"
                 ? e.task_json
                 : JSON.stringify(e.task_json);
-            const taskRepr = format_repr(taskText, 40); // 表格中展示的截断任务文本
+            const taskRepr = format_repr(taskText, 30); // 表格中展示的截断任务文本
             const canRetry = e.task_json !== undefined && !taskText.startsWith("<");
             const retryLabel = canRetry ? t("errors.retryInject") : t("errors.retryUnavailable");
             const retryClass = canRetry ? "retry-link" : "retry-disabled";
