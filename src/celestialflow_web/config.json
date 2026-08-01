@@ -26,7 +26,16 @@
     "errors": {
         "pageSize": 20,
         "sortOrder": "newest",
-        "jumpToInjectionAfterRetry": false
+        "jumpToInjectionAfterRetry": false,
+        "columns": [
+            "index",
+            "event_id",
+            "message",
+            "stage",
+            "task",
+            "time",
+            "retry"
+        ]
     },
     "injection": {
         "showInjectableOnly": false

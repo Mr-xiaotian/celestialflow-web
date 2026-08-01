@@ -324,6 +324,19 @@
                                     />
                                 </div>
                                 <div
+                                    class="settings-item settings-item-center"
+                                    data-settings-tab="errors"
+                                >
+                                    <button
+                                        id="open-error-columns-editor"
+                                        class="btn-layout-editor"
+                                        type="button"
+                                        data-i18n="settings.editErrorColumns"
+                                    >
+                                        编辑表格字段
+                                    </button>
+                                </div>
+                                <div
                                     class="settings-item"
                                     data-settings-tab="task-injection"
                                 >
@@ -458,17 +471,7 @@
                     <div id="errors-table-container">
                         <table id="errors-table">
                             <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th data-i18n="errors.colId">错误id</th>
-                                    <th data-i18n="errors.colMessage">
-                                        错误信息
-                                    </th>
-                                    <th data-i18n="errors.colNode">节点</th>
-                                    <th data-i18n="errors.colTask">任务</th>
-                                    <th data-i18n="errors.colTime">时间</th>
-                                    <th data-i18n="errors.colRetry">重试</th>
-                                </tr>
+                                <tr></tr>
                             </thead>
                             <tbody></tbody>
                         </table>
@@ -714,6 +717,78 @@
                         id="layout-reset-btn"
                         class="btn-layout-reset"
                         type="button"
+                    >
+                        重置默认
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="errors-columns-editor-overlay" class="overlay hidden">
+            <div
+                id="errors-columns-editor"
+                class="layout-editor error-columns-editor"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="errors-columns-editor-title"
+            >
+                <div class="layout-editor-header">
+                    <span
+                        id="errors-columns-editor-title"
+                        class="layout-editor-title"
+                        data-i18n="errors.columns.title"
+                        >表格字段</span
+                    >
+                    <button
+                        id="errors-columns-editor-close"
+                        class="settings-close"
+                        type="button"
+                        data-i18n-aria-label="settings.close"
+                        aria-label="关闭设置"
+                    >
+                        &times;
+                    </button>
+                </div>
+                <div class="error-columns-shell">
+                    <div class="layout-column">
+                        <div
+                            class="layout-column-header"
+                            data-i18n="errors.columns.visible"
+                        >
+                            已显示字段
+                        </div>
+                        <div
+                            class="layout-column-dropzone"
+                            id="errors-columns-dropzone-visible"
+                        ></div>
+                    </div>
+                    <div class="layout-column">
+                        <div
+                            class="layout-column-header"
+                            data-i18n="errors.columns.hidden"
+                        >
+                            未显示字段
+                        </div>
+                        <div
+                            class="layout-column-dropzone"
+                            id="errors-columns-dropzone-hidden"
+                        ></div>
+                    </div>
+                </div>
+                <div class="layout-editor-footer">
+                    <button
+                        id="errors-columns-save-btn"
+                        class="btn-layout-save"
+                        type="button"
+                        data-i18n="errors.columns.save"
+                    >
+                        保存并关闭
+                    </button>
+                    <button
+                        id="errors-columns-reset-btn"
+                        class="btn-layout-reset"
+                        type="button"
+                        data-i18n="errors.columns.reset"
                     >
                         重置默认
                     </button>

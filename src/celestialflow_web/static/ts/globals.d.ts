@@ -8,6 +8,15 @@ type DashboardColumnKey = "left" | "middle" | "right"; // 仪表盘三栏布局 
 
 type DashboardLayout = Record<DashboardColumnKey, string[]>; // 每个栏位内的卡片 ID 顺序
 
+type ErrorColumnKey =
+  | "index"
+  | "event_id"
+  | "message"
+  | "stage"
+  | "task"
+  | "time"
+  | "retry"; // 错误日志表格可配置字段 key
+
 type ApiVersionedResponse<T> = {
   rev: number; // 当前数据版本号
   data: T | null; // 当 known_rev 未变化时可能返回 null
@@ -41,6 +50,7 @@ type ErrorTypeCountsPullResponse = ApiVersionedResponse<ErrorTypeCount[]>; // �
 declare function preloadInjectionDraftFromError(
   nodeName: string,
   taskData: unknown,
+  jumpToInjection?: boolean,
 ): void;
 
 type ChartPoint = { x: number; y: number }; // Chart.js 折线图点坐标
@@ -164,3 +174,6 @@ declare function t(key: string, ...args: string[]): string;
 
 /** 将国际化属性应用到 DOM 元素 */
 declare function applyI18nDOM(): void;
+
+/** 根据当前配置重绘错误日志表头 */
+declare function renderErrorsTableHeader(): void;
