@@ -1,0 +1,203 @@
+<div
+    id="settings-panel"
+    class="settings-panel hidden"
+    role="dialog"
+    aria-modal="false"
+    aria-labelledby="settings-panel-title"
+>
+    <div class="settings-header">
+        <span
+            id="settings-panel-title"
+            class="settings-title"
+            data-i18n="settings.title"
+            >设置</span
+        >
+        <button
+            id="settings-close"
+            class="settings-close"
+            type="button"
+            data-i18n-aria-label="settings.close"
+            aria-label="关闭设置"
+        >
+            &times;
+        </button>
+    </div>
+    <div class="settings-body">
+        <div class="settings-divider" role="separator">
+            <span
+                class="settings-divider-label"
+                data-i18n="settings.scope.global"
+                >全局设置</span
+            >
+        </div>
+        <div class="settings-item">
+            <label for="language-select" data-i18n="settings.language"
+                >界面语言</label
+            >
+            <select id="language-select">
+                <option value="zh-CN">中文</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+            </select>
+        </div>
+        <div class="settings-item">
+            <label
+                for="refresh-interval"
+                data-i18n="settings.refreshInterval"
+                >刷新间隔</label
+            >
+            <select id="refresh-interval">
+                <option value="1000" data-i18n="interval.1s">1秒</option>
+                <option value="2000" data-i18n="interval.2s">2秒</option>
+                <option value="5000" selected data-i18n="interval.5s">
+                    5秒
+                </option>
+                <option value="10000" data-i18n="interval.10s">10秒</option>
+                <option value="30000" data-i18n="interval.30s">30秒</option>
+            </select>
+        </div>
+        <div class="settings-item">
+            <label
+                for="auto-refresh-toggle"
+                data-i18n="settings.autoRefresh"
+                >自动刷新</label
+            >
+            <input
+                id="auto-refresh-toggle"
+                class="settings-toggle"
+                type="checkbox"
+            />
+        </div>
+        <div id="settings-current-group" class="settings-scope-group">
+            <div class="settings-divider" role="separator">
+                <span
+                    id="settings-current-label"
+                    class="settings-divider-label"
+                    data-i18n="settings.scope.dashboard"
+                    >仪表盘设置</span
+                >
+            </div>
+            <div class="settings-item" data-settings-tab="dashboard">
+                <label for="history-limit" data-i18n="settings.historyLimit"
+                    >历史长度</label
+                >
+                <select id="history-limit">
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div class="settings-item" data-settings-tab="dashboard">
+                <label
+                    for="structure-edge-delta"
+                    data-i18n="settings.structureEdgeDelta"
+                    >结构图显示增量</label
+                >
+                <input
+                    id="structure-edge-delta"
+                    class="settings-toggle"
+                    type="checkbox"
+                />
+            </div>
+            <div class="settings-item" data-settings-tab="dashboard">
+                <label
+                    for="status-total-pending-toggle"
+                    data-i18n="settings.statusTotalPending"
+                    >节点等待参数使用全局估计</label
+                >
+                <input
+                    id="status-total-pending-toggle"
+                    class="settings-toggle"
+                    type="checkbox"
+                />
+            </div>
+            <div
+                class="settings-item settings-item-center"
+                data-settings-tab="dashboard"
+            >
+                <button
+                    id="open-layout-editor"
+                    class="btn-layout-editor"
+                    type="button"
+                    data-i18n="settings.editLayout"
+                >
+                    编辑卡片布局
+                </button>
+            </div>
+            <div class="settings-item" data-settings-tab="errors">
+                <label
+                    for="error-page-size"
+                    data-i18n="settings.errorPageSize"
+                    >错误每页条数</label
+                >
+                <select id="error-page-size">
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div class="settings-item" data-settings-tab="errors">
+                <label
+                    for="error-sort-order"
+                    data-i18n="settings.errorSortOrder"
+                    >默认排序方式</label
+                >
+                <select id="error-sort-order">
+                    <option value="newest" data-i18n="settings.errorSortNewest">
+                        最新优先
+                    </option>
+                    <option value="oldest" data-i18n="settings.errorSortOldest">
+                        最旧优先
+                    </option>
+                </select>
+            </div>
+            <div class="settings-item" data-settings-tab="errors">
+                <label
+                    for="error-jump-to-injection-toggle"
+                    data-i18n="settings.errorJumpToInjection"
+                    >任务注入后跳转注入页</label
+                >
+                <input
+                    id="error-jump-to-injection-toggle"
+                    class="settings-toggle"
+                    type="checkbox"
+                />
+            </div>
+            <div
+                class="settings-item settings-item-center"
+                data-settings-tab="errors"
+            >
+                <button
+                    id="open-error-columns-editor"
+                    class="btn-layout-editor"
+                    type="button"
+                    data-i18n="settings.editErrorColumns"
+                >
+                    编辑表格字段
+                </button>
+            </div>
+            <div class="settings-item" data-settings-tab="task-injection">
+                <label
+                    for="injectable-only-toggle"
+                    data-i18n="settings.injectionInjectableOnly"
+                    >仅显示可注入节点</label
+                >
+                <input
+                    id="injectable-only-toggle"
+                    class="settings-toggle"
+                    type="checkbox"
+                />
+            </div>
+            <div
+                id="settings-current-empty"
+                class="settings-empty hidden"
+                data-i18n="settings.current.empty"
+            >
+                当前页暂无专属设置
+            </div>
+        </div>
+        <div id="settings-status" class="settings-status hidden"></div>
+    </div>
+</div>

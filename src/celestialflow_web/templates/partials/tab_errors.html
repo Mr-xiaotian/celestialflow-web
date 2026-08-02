@@ -1,0 +1,62 @@
+<div id="errors" class="tab-content">
+    <div class="tip-section">
+        <div class="tip-content">
+            <svg
+                class="tip-icon"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+            >
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                ></path>
+            </svg>
+            <p class="tip-text" data-i18n="errors.tip">
+                错误日志内容与仪表盘状态数值可能因异步刷新与落盘时序差而暂时不一致。
+            </p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="filter-container">
+            <h2 class="card-title" data-i18n="errors.title">错误日志</h2>
+            <div class="filter-controls">
+                <div>
+                    <span class="filter-label" data-i18n="errors.searchLabel"
+                        >关键词搜索:</span
+                    >
+                    <input
+                        type="text"
+                        id="error-search"
+                        class="error-search-input"
+                        data-i18n-placeholder="errors.searchPlaceholder"
+                        placeholder="搜索错误或任务"
+                    />
+                </div>
+                <div>
+                    <span class="filter-label" data-i18n="errors.filterLabel"
+                        >按节点筛选:</span
+                    >
+                    <select id="node-filter">
+                        <option value="" data-i18n="errors.allNodes">
+                            全部节点
+                        </option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="errors-table-container">
+            <table id="errors-table">
+                <thead>
+                    <tr></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <div id="pager-container" class="pager-container"></div>
+        </div>
+    </div>
+</div>
