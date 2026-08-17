@@ -15,5 +15,5 @@
 
 ### CelestialFlow
 
-- 位于: D:\Project\CelestialFlow
-- 关系: 本项目为CelestialFlow提供可视化的web界面
+- 位于: ../CelestialFlow
+- 关系: 本项目为 CelestialFlow 提供可视化的web界面
