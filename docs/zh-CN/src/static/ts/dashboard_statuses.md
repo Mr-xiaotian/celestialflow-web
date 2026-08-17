@@ -1,6 +1,6 @@
 # dashboard_statuses.ts
 
-> 📅 最后更新日期: 2026/06/11
+> 📅 最后更新日期: 2026/08/18
 
 管理各节点运行状态数据的加载、同步与仪表盘状态卡片的动态渲染。提供运行时间彩色分段渲染能力。
 
@@ -16,7 +16,6 @@ type NodeStatus = {
   tasks_succeeded: number;     // 成功处理的任务数
   tasks_failed: number;        // 处理失败的任务数
   tasks_duplicated: number;    // 被去重过滤的任务数
-  stage_mode: string;          // 节点模式（serial/thread）
   execution_mode: string;      // 运行模式（serial/thread/async）
   max_workers: number;         // 最大并发数
   start_time: number;          // 启动 Unix 时间戳
@@ -118,6 +117,7 @@ type ElapsedSegment = {
 
 - **实时增量**: 对比 `lastNodeStatuses` 自动计算成功/失败/等待/重复任务的增量并彩色显示。
 - **状态标记**: 卡片左侧边框颜色反映节点状态（蓝色=运行中 `status-running`，灰色=已停止 `status-stopped`）。
+- **字段同步**: 状态卡只依赖后端当前仍会上报的字段，不再展示已从 reporter 移除的 `stage_mode`。
 - **运行时间彩色分段**: 调用 `formatElapsedDuration()` 为 `elapsed_time` 生成基于任务成功/失败/重复比例染色的 HTML。
 - **四段式进度条**: 直观展示成功（绿）、错误（红）、重复（黄）、等待（灰）的比例。
 - **时间预估**: 显示已运行时间、预计剩余时间、平均任务耗时和进度百分比。
@@ -157,7 +157,7 @@ const nodeStatus: NodeStatus = {
   tasks_processed: 250, tasks_succeeded: 240,
   tasks_failed: 5, tasks_duplicated: 5,
   tasks_pending: 30, total_tasks_pending: 50,
-  stage_mode: "thread", execution_mode: "thread",
+  execution_mode: "thread",
   max_workers: 4,
   start_time: 1745400000, elapsed_time: 3600,
   remaining_time: 600, total_remaining_time: 1200,

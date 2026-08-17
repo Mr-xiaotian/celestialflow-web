@@ -1,8 +1,8 @@
 # dashboard_analysis.ts
 
-> 📅 最后更新日期: 2026/06/11
+> 📅 最后更新日期: 2026/08/18
 
-管理图分析信息的加载与分析面板的渲染。提供对 TaskGraph 拓扑结构的深度洞察，如 DAG 检测、层级分析、调度模式等。
+管理图分析信息的加载与分析面板的渲染。提供对 TaskGraph 拓扑结构的深度洞察，如 DAG 检测、层级分析、图模式等。
 
 ## 类型定义
 
@@ -12,7 +12,7 @@ type AnalysisData = {
   startTime: number;               // 任务图启动时间戳
   className: string;               // 图结构分类名称（Python 类名）
   isDAG: boolean;                  // 当前任务图是否为 DAG
-  scheduleMode: string;            // 图级调度模式名称（eager / staged）
+  graphMode: string;               // 图级执行模式名称（serial / thread / async）
   layersDict: Record<string, unknown>; // 层级分析结果，键数量用于统计层数
 };
 ```
@@ -49,7 +49,7 @@ type AnalysisData = {
 | `analysis.startTime` | `startTime` | 图启动时间戳（`> 0` 时格式化，否则显示 `-`） |
 | `analysis.structType` | `className` | TaskGraph 具体的 Python 类名，带提示气泡 |
 | `analysis.isDAG` | `isDAG` | `true` 时显示绿色 `.ok` 类，`false` 时显示红色 `.warn` 类 |
-| `analysis.scheduleMode` | `scheduleMode` | 图级调度模式，带提示气泡 |
+| `analysis.graphMode` | `graphMode` | 图级执行模式，带提示气泡 |
 | `analysis.layerCount` | `layersDict` | 通过 `Object.keys(layersDict).length` 推导层级总数 |
 
 ## 数据流
@@ -83,7 +83,7 @@ const mockAnalysis: AnalysisData = {
   startTime: 1718000000,
   className: "TaskGraph",
   isDAG: true,
-  scheduleMode: "eager",
+  graphMode: "thread",
   layersDict: { "0": ["StageA"], "1": ["StageB", "StageC"] },
 };
 
@@ -93,5 +93,5 @@ const mockAnalysis: AnalysisData = {
 
 // renderAnalysisInfo() 将其渲染到 #analysis-info
 // 若 analysisData === null → 显示空态占位
-// 否则渲染：图名称、启动时间、结构类型、是否DAG、调度模式、层级数量
+// 否则渲染：图名称、启动时间、结构类型、是否DAG、图模式、层级数量
 ```

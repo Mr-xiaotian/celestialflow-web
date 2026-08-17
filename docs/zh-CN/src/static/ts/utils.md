@@ -111,7 +111,7 @@ calcRemainTime(500, 100, 300);  // 60
 format_repr("very long string...", 10);  // "very lo...g..."
 
 // ====== 提示标签 ======
-renderLabelWithTooltip("status.stageMode", "status.stageModeHelp");
+renderLabelWithTooltip("status.executionMode", "status.executionModeHelp");
 // 返回带 tooltip-trigger 和 tooltip-bubble 的 HTML
 
 // ====== 页签跳转 ======

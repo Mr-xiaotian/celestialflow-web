@@ -1,6 +1,6 @@
 # dashboard_structure.ts
 
-> 📅 最后更新日期: 2026/06/11
+> 📅 最后更新日期: 2026/08/18
 
 管理任务图结构数据的加载与 Mermaid 流程图的可视化渲染，支持基于节点状态的实时着色和边增量显示。
 
@@ -12,7 +12,6 @@
 type StructureNodeMeta = {
   func_name: string;       // 节点函数名，用于推导节点类型（如 _split, _route）
   execution_mode: string;  // 节点执行模式
-  stage_mode: string;      // 节点阶段模式
   max_workers: number;     // 并发 worker 数上限
 };
 
@@ -108,9 +107,9 @@ sequenceDiagram
 // 模拟结构数据
 const mockStructure: StructureGraph = {
   nodes: {
-    "DataLoader": { func_name: "_source", execution_mode: "serial", stage_mode: "serial", max_workers: 1 },
-    "Processor":  { func_name: "process", execution_mode: "thread", stage_mode: "thread", max_workers: 4 },
-    "Router":     { func_name: "_route", execution_mode: "serial", stage_mode: "serial", max_workers: 1 },
+    "DataLoader": { func_name: "_source", execution_mode: "serial", max_workers: 1 },
+    "Processor":  { func_name: "process", execution_mode: "thread", max_workers: 4 },
+    "Router":     { func_name: "_route", execution_mode: "serial", max_workers: 1 },
   },
   edges: {
     "DataLoader": ["Processor"],
