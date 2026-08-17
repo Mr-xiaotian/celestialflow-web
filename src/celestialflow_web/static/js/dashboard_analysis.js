@@ -1,7 +1,7 @@
 "use strict";
 /**
  * 拓扑分析模块
- * 负责拉取和展示图结构的拓扑分析结果（如是否为 DAG、调度模式等）
+ * 负责拉取和展示图结构的拓扑分析结果（如是否为 DAG、图模式等）
  */
 // 全局状态
 let analysisData = null; // 拓扑分析数据；未加载时为 null
@@ -33,7 +33,7 @@ async function loadAnalysis() {
 }
 /**
  * 渲染分析信息面板
- * 根据 analysisData 在页面上显示结构类型、DAG 状态、调度模式和层级数量等信息
+ * 根据 analysisData 在页面上显示结构类型、DAG 状态、图模式和层级数量等信息
  * @returns {void}
  */
 function renderAnalysisInfo() {
@@ -44,7 +44,7 @@ function renderAnalysisInfo() {
         container.innerHTML = `<div class="empty-placeholder">${t("analysis.noData")}</div>`;
         return;
     }
-    const { name, startTime, isDAG, scheduleMode, className, layersDict } = analysisData; // 解构常用分析字段
+    const { name, startTime, isDAG, graphMode, className, layersDict } = analysisData; // 解构常用分析字段
     const layerCount = Object.keys(layersDict).length; // 通过层级字典键数推导层级总数
     const startTimeText = startTime > 0 ? formatTimestamp(startTime) : "-";
     // 统一构建分析信息内容，避免分散更新不同 DOM 节点。
@@ -72,8 +72,8 @@ function renderAnalysisInfo() {
     </div>
 
     <div class="analysis-row">
-      <span class="analysis-label">${renderLabelWithTooltip("analysis.scheduleMode", "analysis.scheduleModeHelp")}</span>
-      <span class="analysis-value">${escapeHtml(scheduleMode)}</span>
+      <span class="analysis-label">${renderLabelWithTooltip("analysis.graphMode", "analysis.graphModeHelp")}</span>
+      <span class="analysis-value">${escapeHtml(graphMode)}</span>
     </div>
 
     <div class="analysis-row">

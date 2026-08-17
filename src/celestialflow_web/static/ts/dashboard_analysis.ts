@@ -1,6 +1,6 @@
 /**
  * 拓扑分析模块
- * 负责拉取和展示图结构的拓扑分析结果（如是否为 DAG、调度模式等）
+ * 负责拉取和展示图结构的拓扑分析结果（如是否为 DAG、图模式等）
  */
 
 type AnalysisData = {
@@ -8,7 +8,7 @@ type AnalysisData = {
   startTime: number; // 任务图启动时间戳
   className: string; // 图结构分类名称
   isDAG: boolean; // 当前任务图是否为 DAG
-  scheduleMode: string; // 图级调度模式名称
+  graphMode: string; // 图级执行模式名称
   layersDict: Record<string, unknown>; // 层级分析结果，键数量可用于统计层数
 };
 
@@ -43,7 +43,7 @@ async function loadAnalysis(): Promise<boolean> {
 
 /**
  * 渲染分析信息面板
- * 根据 analysisData 在页面上显示结构类型、DAG 状态、调度模式和层级数量等信息
+ * 根据 analysisData 在页面上显示结构类型、DAG 状态、图模式和层级数量等信息
  * @returns {void}
  */
 function renderAnalysisInfo(): void {
@@ -55,7 +55,7 @@ function renderAnalysisInfo(): void {
     return;
   }
 
-  const { name, startTime, isDAG, scheduleMode, className, layersDict } =
+  const { name, startTime, isDAG, graphMode, className, layersDict } =
     analysisData; // 解构常用分析字段
 
   const layerCount = Object.keys(layersDict).length; // 通过层级字典键数推导层级总数
@@ -86,8 +86,8 @@ function renderAnalysisInfo(): void {
     </div>
 
     <div class="analysis-row">
-      <span class="analysis-label">${renderLabelWithTooltip("analysis.scheduleMode", "analysis.scheduleModeHelp")}</span>
-      <span class="analysis-value">${escapeHtml(scheduleMode)}</span>
+      <span class="analysis-label">${renderLabelWithTooltip("analysis.graphMode", "analysis.graphModeHelp")}</span>
+      <span class="analysis-value">${escapeHtml(graphMode)}</span>
     </div>
 
     <div class="analysis-row">

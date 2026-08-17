@@ -11,7 +11,6 @@ type NodeStatus = {
   tasks_succeeded: number; // 成功处理的任务数
   tasks_failed: number; // 处理失败的任务数
   tasks_duplicated: number; // 被去重过滤的任务数
-  stage_mode: string; // 节点模式（serial/thread）
   execution_mode: string; // 运行模式（serial/thread/async）
   max_workers: number; // 最大并发数
   start_time: number; // 启动 Unix 时间戳
@@ -317,7 +316,6 @@ function renderDashboard(): void {
               "text-delta-duplicate",
               "text-delta-duplicate",
             )}</div></div>
-            <div><div class="stat-label">${renderLabelWithTooltip("status.stageMode", "status.stageModeHelp")}</div><div class="stat-value">${escapeHtml(data.stage_mode)}</div></div>
             <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(executionModeDesc)}</div></div>
           </div>
           <div class="text-sm text-carbon">${t("status.startTime")}${formatTimestamp(data.start_time)}</div>
