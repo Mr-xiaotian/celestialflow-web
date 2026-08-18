@@ -7,14 +7,30 @@ name = "celestialflow-web"
 version = "0.1.1"
 description = "CelestialFlow Web UI for task graph monitoring and control."
 readme = "README.md"
-license-files = []
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "fastapi>=0.139.0",
     "jinja2>=3.1.6",
     "pydantic>=2.0.0",
     "uvicorn>=0.51.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Mr-xiaotian/celestialflow-web"
+Repository = "https://github.com/Mr-xiaotian/celestialflow-web"
+Issues = "https://github.com/Mr-xiaotian/celestialflow-web/issues"
 
 [project.scripts]
 celestialflow-web = "celestialflow_web.server.core_server:main_entry"

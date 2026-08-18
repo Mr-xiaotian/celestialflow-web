@@ -158,6 +158,7 @@ def test_config_api(client):
     assert "showStructureEdgeDelta" in data["dashboard"]
     assert "sortOrder" in data["errors"]
     assert "jumpToInjectionAfterRetry" in data["errors"]
+    assert "columns" in data["errors"]
     assert "showInjectableOnly" in data["injection"]
 
 def test_server_state_api(client):

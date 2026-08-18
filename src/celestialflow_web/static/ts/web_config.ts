@@ -19,6 +19,7 @@ type WebErrorsConfig = {
   pageSize: number; // 错误日志每页显示条数
   sortOrder: "newest" | "oldest"; // 错误日志默认排序方式
   jumpToInjectionAfterRetry: boolean; // 错误日志点击任务注入后是否切换到任务注入页
+  columns: ErrorColumnKey[]; // 错误日志表格当前显示字段与顺序
 };
 
 type WebInjectionConfig = {
@@ -67,11 +68,22 @@ const DEFAULT_WEB_CONFIG: WebConfig = {
     pageSize: 50,
     sortOrder: "newest",
     jumpToInjectionAfterRetry: true,
+    columns: ["index", "event_id", "message", "stage", "task", "time", "retry"],
   },
   injection: {
     showInjectableOnly: true,
   },
 };
+
+const DEFAULT_ERROR_COLUMNS: ErrorColumnKey[] = [
+  "index",
+  "event_id",
+  "message",
+  "stage",
+  "task",
+  "time",
+  "retry",
+];
 
 /** 仪表盘栏位 key 到真实 DOM 选择器的映射。 */
 const PANEL_SELECTOR_MAP: Record<DashboardColumnKey, string> = {
@@ -103,6 +115,25 @@ function normalizeDashboardLayout(
     ...DEFAULT_WEB_CONFIG.dashboard.layout,
     ...(rawLayout ?? {}),
   };
+}
+
+/**
+ * 基于默认字段列表补齐错误日志表格字段配置。
+ * @param {ErrorColumnKey[] | null | undefined} rawColumns - 原始错误表格字段顺序。
+ * @returns {ErrorColumnKey[]} 去重且只保留受支持字段后的稳定字段顺序。
+ */
+function normalizeErrorColumns(
+  rawColumns?: ErrorColumnKey[] | null,
+): ErrorColumnKey[] {
+  if (!Array.isArray(rawColumns)) {
+    return [...DEFAULT_ERROR_COLUMNS];
+  }
+  const validColumns = new Set(DEFAULT_ERROR_COLUMNS);
+  const dedupedColumns = rawColumns.filter(
+    (column, index) =>
+      validColumns.has(column) && rawColumns.indexOf(column) === index,
+  );
+  return dedupedColumns;
 }
 
 /**
@@ -142,6 +173,7 @@ function normalizeWebConfig(
       errors: {
         ...DEFAULT_WEB_CONFIG.errors,
         ...(rawConfig.errors ?? {}),
+        columns: normalizeErrorColumns(rawConfig.errors?.columns),
       },
       injection: {
         ...DEFAULT_WEB_CONFIG.injection,
@@ -181,6 +213,7 @@ function normalizeWebConfig(
         legacyConfig.errorSortOrder ?? DEFAULT_WEB_CONFIG.errors.sortOrder,
       jumpToInjectionAfterRetry:
         DEFAULT_WEB_CONFIG.errors.jumpToInjectionAfterRetry,
+      columns: [...DEFAULT_WEB_CONFIG.errors.columns],
     },
     injection: {
       ...DEFAULT_WEB_CONFIG.injection,
@@ -478,6 +511,7 @@ function applyConfig(): void {
   errorSortSelect.value = errorSortOrder;
   webConfig.errors.jumpToInjectionAfterRetry =
     webConfig.errors.jumpToInjectionAfterRetry !== false;
+  webConfig.errors.columns = normalizeErrorColumns(webConfig.errors.columns);
   const errorJumpToInjectionToggle = document.getElementById(
     "error-jump-to-injection-toggle",
   ) as HTMLInputElement | null;
@@ -485,6 +519,7 @@ function applyConfig(): void {
     errorJumpToInjectionToggle.checked =
       webConfig.errors.jumpToInjectionAfterRetry;
   }
+  renderErrorsTableHeader();
 
   // 应用结构图边增量显示开关
   webConfig.dashboard.showStructureEdgeDelta =

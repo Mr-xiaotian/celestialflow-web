@@ -3,6 +3,32 @@
  * 错误日志分页与过滤模块
  * 处理错误记录的异步拉取、前端分页逻辑以及按节点/关键词搜索的过滤展示
  */
+const DEFAULT_VISIBLE_ERROR_COLUMNS = [
+    "index",
+    "event_id",
+    "message",
+    "stage",
+    "task",
+    "time",
+    "retry",
+]; // 错误日志表格默认显示字段顺序
+const ERROR_COLUMN_META = {
+    index: { labelKey: "errors.colIndex" },
+    event_id: { labelKey: "errors.colId", cellClassName: "error-id" },
+    message: {
+        labelKey: "errors.colMessage",
+        cellClassName: "error-cell",
+    },
+    stage: { labelKey: "errors.colNode" },
+    task: { labelKey: "errors.colTask" },
+    time: { labelKey: "errors.colTime" },
+    retry: { labelKey: "errors.colRetry" },
+}; // 错误日志字段元信息
+const ALL_ERROR_COLUMN_IDS = Object.keys(ERROR_COLUMN_META); // 当前支持进入字段编辑器的全部列 key
+const ERROR_COLUMNS_ZONE_IDS = [
+    "errors-columns-dropzone-visible",
+    "errors-columns-dropzone-hidden",
+]; // 字段编辑器中支持互拖的全部区域 ID
 // 全局状态
 let errors = []; // 错误记录列表
 let currentPage = 1; // 当前分页页码
@@ -12,12 +38,282 @@ let totalPages = 1; // 总页数
 let errorsRev = -1; // 数据版本号，用于增量拉取
 let lastQueryKey = ""; // 上次查询的缓存键，用于判断筛选条件是否变化
 let errorsRequestSeq = 0; // 请求序列号，防止旧请求覆盖新结果
+let originalErrorColumns = []; // 打开字段编辑器时的字段快照
+let errorColumnSortableInstances = {}; // 字段编辑器拖拽实例缓存
 // DOM 元素引用（错误页）
 const searchInput = document.getElementById("error-search");
 const nodeFilter = document.getElementById("node-filter");
 const errorSortSelect = document.getElementById("error-sort-order");
+const errorsTableHeadRow = document.querySelector("#errors-table thead tr");
 const errorsTableBody = document.querySelector("#errors-table tbody");
 const paginationContainer = document.getElementById("pager-container");
+const openErrorColumnsEditorBtn = document.getElementById("open-error-columns-editor");
+const errorColumnsEditorOverlay = document.getElementById("errors-columns-editor-overlay");
+const errorColumnsEditorCloseBtn = document.getElementById("errors-columns-editor-close");
+const errorColumnsSaveBtn = document.getElementById("errors-columns-save-btn");
+const errorColumnsResetBtn = document.getElementById("errors-columns-reset-btn");
+/**
+ * 返回经过去重和过滤后的错误字段顺序。
+ * @param {ErrorColumnKey[] | null | undefined} rawColumns - 原始字段数组。
+ * @returns {ErrorColumnKey[]} 规范化后的字段数组。
+ */
+function normalizeConfiguredErrorColumns(rawColumns) {
+    if (!Array.isArray(rawColumns)) {
+        return [...DEFAULT_VISIBLE_ERROR_COLUMNS];
+    }
+    const validColumns = new Set(DEFAULT_VISIBLE_ERROR_COLUMNS);
+    return rawColumns.filter((column, index) => validColumns.has(column) && rawColumns.indexOf(column) === index);
+}
+/**
+ * 读取当前配置中的错误字段顺序；缺省时返回默认值。
+ * @returns {ErrorColumnKey[]} 当前生效的错误字段顺序。
+ */
+function getActiveErrorColumns() {
+    return normalizeConfiguredErrorColumns(webConfig?.errors.columns);
+}
+/**
+ * 将任意任务对象稳定格式化为错误表格文本。
+ * @param {unknown} taskData - 当前错误记录中的任务数据。
+ * @returns {string} 可直接展示与 tooltip 使用的字符串。
+ */
+function getErrorTaskText(taskData) {
+    if (typeof taskData === "string") {
+        return taskData;
+    }
+    if (taskData === undefined) {
+        return "undefined";
+    }
+    if (taskData === null) {
+        return "null";
+    }
+    const serialized = JSON.stringify(taskData);
+    return serialized ?? String(taskData);
+}
+/**
+ * 创建字段编辑器中的一张可拖拽字段卡片。
+ * @param {ErrorColumnKey} columnId - 字段 key。
+ * @returns {HTMLElement} 字段卡片节点。
+ */
+function renderErrorColumnCard(columnId) {
+    const el = document.createElement("div");
+    el.className = "layout-card";
+    el.dataset.columnId = columnId;
+    el.innerHTML = `
+    <span class="layout-card-name">${t(ERROR_COLUMN_META[columnId].labelKey)}</span>
+    <span class="layout-card-handle" aria-hidden="true">::</span>`;
+    return el;
+}
+/**
+ * 读取字段编辑器中某个区域的字段顺序。
+ * @param {"visible" | "hidden"} zone - 目标区域。
+ * @returns {ErrorColumnKey[]} 区域中的字段顺序。
+ */
+function getEditorColumns(zone) {
+    const dropzone = document.getElementById(`errors-columns-dropzone-${zone}`);
+    return Array.from(dropzone.querySelectorAll(".layout-card")).map((card) => card.dataset.columnId);
+}
+/**
+ * 渲染字段编辑器中的显示区与隐藏区。
+ * @param {ErrorColumnKey[]} visibleColumns - 当前显示字段顺序。
+ * @returns {void}
+ */
+function renderErrorColumnsEditor(visibleColumns = getActiveErrorColumns()) {
+    const visibleZone = document.getElementById("errors-columns-dropzone-visible");
+    const hiddenZone = document.getElementById("errors-columns-dropzone-hidden");
+    const visibleSet = new Set(visibleColumns);
+    visibleZone.innerHTML = "";
+    hiddenZone.innerHTML = "";
+    for (const columnId of visibleColumns) {
+        visibleZone.appendChild(renderErrorColumnCard(columnId));
+    }
+    for (const columnId of ALL_ERROR_COLUMN_IDS) {
+        if (!visibleSet.has(columnId)) {
+            hiddenZone.appendChild(renderErrorColumnCard(columnId));
+        }
+    }
+    initErrorColumnSortable();
+}
+/**
+ * 打开错误字段编辑器，读取当前配置并渲染。
+ * @returns {void}
+ */
+function openErrorColumnsEditor() {
+    errorColumnsEditorOverlay.classList.remove("hidden");
+    originalErrorColumns = [...getActiveErrorColumns()];
+    renderErrorColumnsEditor(originalErrorColumns);
+}
+/**
+ * 关闭错误字段编辑器。
+ * @param {boolean} [restore=true] - 是否恢复打开前的字段顺序。
+ * @returns {void}
+ */
+function closeErrorColumnsEditor(restore = true) {
+    errorColumnsEditorOverlay.classList.add("hidden");
+    destroyErrorColumnSortable();
+    if (!restore)
+        return;
+    webConfig.errors.columns = [...originalErrorColumns];
+    renderErrorsTableHeader();
+    renderErrors();
+}
+/**
+ * 初始化字段编辑器中的拖拽区域。
+ * @returns {void}
+ */
+function initErrorColumnSortable() {
+    destroyErrorColumnSortable();
+    for (const id of ERROR_COLUMNS_ZONE_IDS) {
+        const zone = document.getElementById(id);
+        if (!zone)
+            continue;
+        errorColumnSortableInstances[id] = Sortable.create(zone, {
+            group: "errors-columns",
+            animation: 150,
+            ghostClass: "dragging",
+            dragClass: "dragging",
+        });
+    }
+}
+/**
+ * 销毁字段编辑器中的拖拽实例。
+ * @returns {void}
+ */
+function destroyErrorColumnSortable() {
+    for (const id of ERROR_COLUMNS_ZONE_IDS) {
+        errorColumnSortableInstances[id]?.destroy();
+    }
+    errorColumnSortableInstances = {};
+}
+/**
+ * 将字段编辑器中的当前顺序写回配置。
+ * @returns {void}
+ */
+function syncErrorColumnsFromEditor() {
+    webConfig.errors.columns = getEditorColumns("visible");
+}
+/**
+ * 保存当前字段顺序到配置并刷新表格。
+ * @returns {Promise<void>}
+ */
+async function saveErrorColumns() {
+    syncErrorColumnsFromEditor();
+    renderErrorsTableHeader();
+    renderErrors();
+    const saved = await saveWebConfig();
+    if (saved) {
+        closeErrorColumnsEditor(false);
+        showSettingsSaveStatus("settings.saveSuccess");
+    }
+    else {
+        showSettingsSaveStatus("settings.saveFailed");
+    }
+}
+/**
+ * 将字段编辑器恢复到默认字段顺序。
+ * @returns {void}
+ */
+function resetErrorColumns() {
+    webConfig.errors.columns = [...DEFAULT_VISIBLE_ERROR_COLUMNS];
+    renderErrorColumnsEditor(webConfig.errors.columns);
+}
+/**
+ * 根据当前配置重绘错误日志表头。
+ * @returns {void}
+ */
+function renderErrorsTableHeader() {
+    const visibleColumns = getActiveErrorColumns();
+    errorsTableHeadRow.innerHTML = "";
+    for (const columnId of visibleColumns) {
+        const th = document.createElement("th");
+        th.textContent = t(ERROR_COLUMN_META[columnId].labelKey);
+        if (ERROR_COLUMN_META[columnId].headerClassName) {
+            th.className = ERROR_COLUMN_META[columnId].headerClassName;
+        }
+        errorsTableHeadRow.appendChild(th);
+    }
+}
+/**
+ * 创建普通文本单元格。
+ * @param {ErrorColumnKey} columnId - 字段 key。
+ * @param {string} text - 单元格文本。
+ * @param {string} [title] - 可选 tooltip。
+ * @returns {HTMLTableCellElement} 单元格节点。
+ */
+function createErrorTextCell(columnId, text, title) {
+    const td = document.createElement("td");
+    td.dataset.label = t(ERROR_COLUMN_META[columnId].labelKey);
+    td.textContent = text;
+    if (title) {
+        td.title = title;
+    }
+    const className = ERROR_COLUMN_META[columnId].cellClassName;
+    if (className) {
+        td.classList.add(className);
+    }
+    return td;
+}
+/**
+ * 创建重试操作单元格。
+ * @param {ErrorData} errorData - 当前错误记录。
+ * @param {string} taskText - 当前任务的序列化文本。
+ * @returns {HTMLTableCellElement} 重试单元格节点。
+ */
+function createRetryCell(errorData, taskText) {
+    const canRetry = errorData.task_json !== undefined && !taskText.startsWith("<");
+    const retryLabel = canRetry
+        ? t("errors.retryInject")
+        : t("errors.retryUnavailable");
+    const retryClass = canRetry ? "retry-link" : "retry-disabled";
+    const td = createErrorTextCell("retry", "");
+    const action = document.createElement("div");
+    action.className = retryClass;
+    action.setAttribute("role", canRetry ? "button" : "note");
+    action.tabIndex = canRetry ? 0 : -1;
+    action.textContent = retryLabel;
+    if (canRetry) {
+        const retryFromCurrentError = () => {
+            preloadInjectionDraftFromError(errorData.stage, errorData.task_json, webConfig.errors.jumpToInjectionAfterRetry);
+        };
+        action.addEventListener("click", retryFromCurrentError);
+        action.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ")
+                return;
+            event.preventDefault();
+            retryFromCurrentError();
+        });
+    }
+    td.appendChild(action);
+    return td;
+}
+/**
+ * 根据字段 key 生成一格错误日志单元格。
+ * @param {ErrorColumnKey} columnId - 字段 key。
+ * @param {ErrorData} errorData - 当前错误记录。
+ * @param {number} index - 当前分页下的全局序号。
+ * @returns {HTMLTableCellElement} 单元格节点。
+ */
+function createErrorCell(columnId, errorData, index) {
+    const errorText = `${errorData.error_type}(${errorData.error_message})`;
+    const errorRepr = format_repr(errorText, 30);
+    const taskText = getErrorTaskText(errorData.task_json);
+    const taskRepr = format_repr(taskText, 30);
+    switch (columnId) {
+        case "index":
+            return createErrorTextCell("index", String(index));
+        case "event_id":
+            return createErrorTextCell("event_id", String(errorData.event_id));
+        case "message":
+            return createErrorTextCell("message", errorRepr, errorText);
+        case "stage":
+            return createErrorTextCell("stage", errorData.stage);
+        case "task":
+            return createErrorTextCell("task", taskRepr, taskText);
+        case "time":
+            return createErrorTextCell("time", formatTimestamp(errorData.ts));
+        case "retry":
+            return createRetryCell(errorData, taskText);
+    }
+}
 /**
  * 构建错误查询缓存键
  * @param {number} page - 当前页码
@@ -80,44 +376,23 @@ async function loadErrors(forceReload = false) {
  */
 function renderErrors() {
     const pageItems = errors; // 后端已按分页返回当前页数据
+    const visibleColumns = getActiveErrorColumns();
     errorsTableBody.innerHTML = "";
+    if (!visibleColumns.length) {
+        errorsTableBody.innerHTML = `<tr><td colspan="1" class="empty-placeholder">${t("errors.noVisibleColumns")}</td></tr>`;
+        renderPaginationControls(totalPages);
+        return;
+    }
     if (!pageItems.length) {
-        errorsTableBody.innerHTML = `<tr><td colspan="7" class="empty-placeholder">${t("errors.noRecords")}</td></tr>`;
+        errorsTableBody.innerHTML = `<tr><td colspan="${visibleColumns.length}" class="empty-placeholder">${t("errors.noRecords")}</td></tr>`;
     }
     else {
         for (let i = 0; i < pageItems.length; i++) {
-            const e = pageItems[i]; // 当前错误记录
+            const errorData = pageItems[i]; // 当前错误记录
             const index = (currentPage - 1) * pageSize + i + 1; // 全局展示序号
             const row = document.createElement("tr"); // 当前表格行
-            const errorText = `${e.error_type}(${e.error_message})`; // 错误完整文本
-            const errorRepr = format_repr(errorText, 40); // 表格中展示的截断错误文本
-            const taskText = typeof e.task_json === "string"
-                ? e.task_json
-                : JSON.stringify(e.task_json);
-            const taskRepr = format_repr(taskText, 40); // 表格中展示的截断任务文本
-            const canRetry = e.task_json !== undefined && !taskText.startsWith("<");
-            const retryLabel = canRetry ? t("errors.retryInject") : t("errors.retryUnavailable");
-            const retryClass = canRetry ? "retry-link" : "retry-disabled";
-            row.innerHTML = `
-        <td data-label="#">${index}</td>
-        <td class="error-id" data-label="${t("errors.colId")}">${e.event_id}</td>
-        <td class="error-cell" data-label="${t("errors.colMessage")}" title="${escapeHtml(errorText)}">${escapeHtml(errorRepr)}</td>
-        <td data-label="${t("errors.colNode")}">${escapeHtml(e.stage)}</td>
-        <td data-label="${t("errors.colTask")}" title="${escapeHtml(taskText)}">${escapeHtml(taskRepr)}</td>
-        <td data-label="${t("errors.colTime")}">${formatTimestamp(e.ts)}</td>
-        <td data-label="${t("errors.colRetry")}"><div class="${retryClass}" role="${canRetry ? "button" : "note"}" tabindex="${canRetry ? "0" : "-1"}">${retryLabel}</div></td>
-      `;
-            const retryAction = row.querySelector(".retry-link");
-            if (retryAction && canRetry) {
-                retryAction.addEventListener("click", () => {
-                    preloadInjectionDraftFromError(e.stage, e.task_json, webConfig.errors.jumpToInjectionAfterRetry);
-                });
-                retryAction.addEventListener("keydown", (event) => {
-                    if (event.key !== "Enter" && event.key !== " ")
-                        return;
-                    event.preventDefault();
-                    preloadInjectionDraftFromError(e.stage, e.task_json, webConfig.errors.jumpToInjectionAfterRetry);
-                });
+            for (const columnId of visibleColumns) {
+                row.appendChild(createErrorCell(columnId, errorData, index));
             }
             errorsTableBody.appendChild(row);
         }
@@ -223,6 +498,17 @@ function populateNodeFilter(statuses) {
         nodeFilter.value = "";
     }
 }
+openErrorColumnsEditorBtn.addEventListener("click", openErrorColumnsEditor);
+errorColumnsEditorCloseBtn.addEventListener("click", () => {
+    closeErrorColumnsEditor();
+});
+errorColumnsEditorOverlay.addEventListener("click", (event) => {
+    if (event.target.id === "errors-columns-editor-overlay") {
+        closeErrorColumnsEditor();
+    }
+});
+errorColumnsSaveBtn.addEventListener("click", saveErrorColumns);
+errorColumnsResetBtn.addEventListener("click", resetErrorColumns);
 // 输入搜索关键词时立即重新筛选错误列表并回到第一页。
 searchInput.addEventListener("input", async () => {
     currentPage = 1;

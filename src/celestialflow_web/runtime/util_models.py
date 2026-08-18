@@ -75,6 +75,17 @@ class ErrorsPageConfigModel(BaseModel):
     pageSize: int = 10
     sortOrder: str = "newest"
     jumpToInjectionAfterRetry: bool = True
+    columns: list[str] = Field(
+        default_factory=lambda: [
+            "index",
+            "event_id",
+            "message",
+            "stage",
+            "task",
+            "time",
+            "retry",
+        ]
+    )
 
 
 class InjectionPageConfigModel(BaseModel):
