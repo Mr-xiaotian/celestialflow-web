@@ -1,6 +1,6 @@
 # util_models
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/08/19
 
 ## 作用
 
@@ -124,6 +124,7 @@
 | `pageSize` | `int` | `10` | 错误页每页条数 |
 | `sortOrder` | `str` | `"newest"` | 默认排序方式（`"newest"` / `"oldest"`） |
 | `jumpToInjectionAfterRetry` | `bool` | `True` | 任务重试后是否跳转到注入页 |
+| `columns` | `list[str]` | `["index", "event_id", "message", "stage", "task", "time", "retry"]` | 错误页表格的列定义与显示顺序（受设置面板中的列编辑器控制） |
 
 ### InjectionPageConfigModel
 
@@ -179,6 +180,7 @@ config = WebConfigModel(
         pageSize=10,
         sortOrder="newest",
         jumpToInjectionAfterRetry=True,
+        columns=["index", "event_id", "message", "stage", "task", "time", "retry"],
     ),
     injection=InjectionPageConfigModel(
         showInjectableOnly=True,

@@ -1,10 +1,10 @@
 # index.html
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/08/19
 
 Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
 
-> ⚠️ **已变更**: 仪表盘右栏新增错误类型分布卡片（`.error-types-card`），JS 脚本加载顺序新增 `dashboard_error_types.js`。
+> ⚠️ **已变更**: 仪表盘右栏新增错误类型分布卡片（`.error-types-card`），JS 脚本加载顺序新增 `dashboard_error_types.js`；`partials/` 下拆分出 tab、modal、scripts、settings 等子模板。
 
 ## 整体布局
 
@@ -19,6 +19,20 @@ Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
   └─ #task-injection  — 任务注入
 ```
 
+模板使用 Jinja2 的 `{% include %}` 将各职责区域拆为子模板：
+
+| Partial | 职责 |
+|---------|------|
+| `partials/head.html` | `<head>` 区块：favicon、CSS、CDN 库（Chart.js、SortableJS、Mermaid） |
+| `partials/header.html` | 顶部控制栏与设置按钮、`#settings-panel` 的容器 |
+| `partials/settings_panel.html` | 设置面板中的语言、刷新率、自动刷新、错误分页/排序/跳转/字段编辑、仪表盘历史/边增量/等待模式/布局编辑、注入页"仅可注入"等控件 |
+| `partials/tab_dashboard.html` | 仪表盘 tab 容器，含 `.left-panel` / `.middle-panel` / `.right-panel` 三个空栏位和隐藏的 `#card-pool` |
+| `partials/tab_errors.html` | 错误日志 tab：搜索框、节点筛选、错误表格、分页容器 |
+| `partials/tab_injection.html` | 任务注入 tab：节点浏览、当前节点编辑、待发送数据预览、提交与状态消息 |
+| `partials/modal_layout_editor.html` | 仪表盘卡片布局编辑弹窗（`#layout-editor-overlay`） |
+| `partials/modal_error_columns_editor.html` | 错误表格字段编辑弹窗（`#errors-columns-editor-overlay`） |
+| `partials/scripts.html` | 编译产物的 JS 脚本加载顺序（见下） |
+
 ## Header 控制栏
 
 | 元素 | ID / Class | 说明 |
@@ -30,6 +44,8 @@ Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
 | 主题切换 | `#theme-toggle` | 圆角胶囊按钮，切换明暗模式 |
 
 ## Dashboard 三栏结构
+
+`tab_dashboard.html` 中只提供三个空栏位容器和隐藏的 `#card-pool`。所有卡片 DOM 由 `web_config.ts` 在模块加载时根据 `CARD_TEMPLATES` 注入到 `#card-pool`，再由 `applyDashboardLayout()` 按 `webConfig.dashboard.layout` 移动到三栏。
 
 ### 左栏 `.left-panel`
 
@@ -56,21 +72,21 @@ Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
 
 | 库 | 版本 | 用途 |
 |----|------|------|
-| Chart.js | latest | 折线图绘制 |
-| SortableJS | latest | 节点卡片拖拽排序 |
-| Mermaid | `^10` (ESM) | 任务图可视化渲染 |
+| Chart.js | 未固定（CDN latest） | 折线图绘制 |
+| SortableJS | `@latest` | 仪表盘布局与错误表格字段的拖拽排序 |
+| Mermaid | `^10`（ESM） | 任务图可视化渲染 |
 
 ## JS 脚本加载顺序
 
-脚本按依赖关系顺序加载：
+脚本按依赖关系顺序加载（详见 `partials/scripts.html`）：
 
 ```html
 i18n.js               ← 国际化支持
 utils.js              ← 通用工具函数
-web_config.js         ← 配置管理逻辑
+web_config.js         ← 配置管理逻辑 + 卡片 DOM 注入（模块加载时调用 ensureAllCards）
 dashboard_statuses.js ← 节点状态管理
 dashboard_structure.js← 结构图渲染
-errors.js             ← 错误日志分页
+errors.js             ← 错误日志分页 + 字段编辑器
 dashboard_analysis.js ← 拓扑分析展示
 dashboard_error_types.js ← 错误类型分布卡片
 dashboard_summary.js  ← 汇总统计
@@ -79,6 +95,8 @@ injection.js          ← 任务注入逻辑
 main.js               ← 全局入口与轮询协调
 layout_editor.js      ← 卡片布局编辑器（依赖 web_config 的 CARD_TEMPLATES、PANEL_SELECTOR_MAP 及 applyDashboardLayout）
 ```
+
+> 注意：上述 `web_config.js` 中模块加载时会立即调用 `ensureAllCards()`，把全部卡片 DOM 提前注入到 `#card-pool`，保证 `main.js` 中 `renderMermaidStructure()` 等函数能通过 `getElementById` 找到对应节点。
 
 ## CSS 样式引用
 
@@ -102,13 +120,23 @@ css/injection_preview.css    ← 注入页预览样式
 
 悬浮模态窗（默认 `.overlay.hidden` 隐藏），支持拖拽排序三栏仪表盘卡片。
 
-- **遮罩层**: `#layout-editor-overlay` / `.overlay` — 全屏半透明黑色背景，`z-index: 200`
-- **编辑器主体**: `#layout-editor` / `.layout-editor` — 圆角卡片容器，`max-width: 700px`
+- **遮罩层**: `#layout-editor-overlay` / `.overlay` — 全屏半透明黑色背景
+- **编辑器主体**: `#layout-editor` / `.layout-editor` — 圆角卡片容器
 - **三栏放置区**: 左中右三个 drop zone（`#layout-dropzone-left`、`#layout-dropzone-middle`、`#layout-dropzone-right`），基于 SortableJS 实现拖拽
-- **未使用池**: `#layout-dropzone-unused` — 横向 drop zone，容纳被移出三栏的卡片
+- **未使用池**: `#layout-dropzone-unused` — 容纳被移出三栏的卡片
 - **底部按钮**: 保存（`#layout-save-btn`）和重置默认（`#layout-reset-btn`）
-- 通过设置面板中的 `.btn-layout-editor` 按钮打开；点击 `#layout-editor-close` 或遮罩外部关闭
+- 通过设置面板中的 `#open-layout-editor` 按钮打开；点击 `#layout-editor-close` 或遮罩外部关闭
 - 保存时调用 `applyDashboardLayout()` 立即生效，再调用 `saveWebConfig()` 持久化到后端
+
+## 错误表格字段编辑器模态窗 (`#errors-columns-editor-overlay`)
+
+由 `partials/modal_error_columns_editor.html` 引入：
+
+- **遮罩层**: `#errors-columns-editor-overlay` / `.overlay` — 复用与布局编辑器相同的遮罩样式
+- **主体**: `#errors-columns-editor` / `.layout-editor.error-columns-editor` — 含两个 dropzone：`#errors-columns-dropzone-visible` 与 `#errors-columns-dropzone-hidden`
+- **底部按钮**: 保存（`#errors-columns-save-btn`）和重置默认（`#errors-columns-reset-btn`）
+- 通过设置面板中的 `#open-error-columns-editor` 按钮打开；点击 `#errors-columns-editor-close` 或遮罩外部关闭
+- 由 `errors.ts` 的 `openErrorColumnsEditor()` / `saveErrorColumns()` 负责逻辑，详见 `errors.md`
 
 ## 使用示例
 
@@ -153,34 +181,70 @@ python -c "from celestialflow_web import TaskWebServer; TaskWebServer(host='127.
 
 #### 调整仪表盘布局
 
-模板中硬编码了三栏结构（left-panel / middle-panel / right-panel），可以通过修改对应的卡片容器排序：
+> ⚠️ `tab_dashboard.html` 中**只提供**三个空栏位容器（`.left-panel` / `.middle-panel` / `.right-panel`）和隐藏的 `#card-pool`。**不要直接修改 HTML 中的卡片顺序**，所有卡片由 `web_config.ts` 在模块加载时通过 `CARD_TEMPLATES` 注入 `#card-pool`，再由 `applyDashboardLayout()` 按 `webConfig.dashboard.layout` 移动到三栏。
 
-```html
-<!-- 将结构图和分析信息互换位置 -->
-<div class="left-panel">
-  <div class="analysis-card"><!-- 分析面板 --></div>
-  <div class="mermaid-card"><!-- 结构图 --></div>
-</div>
+如需调整三栏布局，优先通过以下两种方式：
+
+1. **运行时**：打开设置面板中的“编辑仪表盘布局”（`#open-layout-editor`），在 `#layout-editor-overlay` 弹窗中拖拽卡片到目标栏位后保存。
+2. **默认值**：编辑 `src/celestialflow_web/static/ts/web_config.ts` 中的 `DEFAULT_WEB_CONFIG.dashboard.layout`，例如：
+
+```typescript
+dashboard: {
+    layout: {
+        left: ["analysis", "mermaid"],   // 将分析卡片放在最上方
+        middle: ["status"],
+        right: ["progress", "summary", "error-types"],
+    },
+}
 ```
+
+可用卡片 key：`mermaid`、`analysis`、`status`、`progress`、`error-types`、`summary`。
 
 #### 通过配置动态控制
 
-运行时的卡片布局实际由 `WebConfig.dashboard` 控制，在 `web_config.ts` 中修改默认值或通过后端 `config.json` 调整：
+运行时的全部 UI 偏好由分组 `WebConfig` 控制，包含 `global` / `dashboard` / `errors` / `injection` 四个子节。`web_config.ts` 在启动时通过 `GET /api/web_config` 读取用户配置；保存时调用 `POST /api/web_config` 整体覆盖。可以通过后端 `config.json` 提供初始值：
 
 ```json
 {
+    "global": {
+        "theme": "dark",
+        "language": "zh-CN",
+        "autoRefreshEnabled": true,
+        "refreshInterval": 5000
+    },
     "dashboard": {
-        "left": ["status"],
-        "middle": ["mermaid"],
-        "right": ["summary", "progress"]
+        "historyLimit": 20,
+        "showStructureEdgeDelta": true,
+        "useTotalPendingInStatus": true,
+        "layout": {
+            "left": ["mermaid", "analysis"],
+            "middle": ["status"],
+            "right": ["progress", "error-types", "summary"]
+        }
+    },
+    "errors": {
+        "pageSize": 50,
+        "sortOrder": "newest",
+        "jumpToInjectionAfterRetry": true,
+        "columns": ["index", "event_id", "message", "stage", "task", "time", "retry"]
+    },
+    "injection": {
+        "showInjectableOnly": true
     }
 }
 ```
 
+> 字段详细说明参见 [`web_config.md`](../static/ts/web_config.md)。修改后通过设置面板的“保存设置”按钮或等待 `saveWebConfig()` 自动触发即可生效。
+
 #### 添加自定义 CSS
 
-将自定义样式文件放入 `src/celestialflow_web/static/css/` 目录，并在 `index.html` 中引入：
+将自定义样式文件放入 `src/celestialflow_web/static/css/` 目录，并在 `partials/head.html` 中用 Jinja2 的 `request.url_for` 引入，确保路径在挂载到非根路径时仍能正确解析：
 
 ```html
-<link rel="stylesheet" href="static/css/custom.css">
+<link
+    rel="stylesheet"
+    href="{{ request.url_for('static', path='css/custom.css') }}"
+/>
 ```
+
+JS 脚本同理使用 `{{ request.url_for('static', path='js/xxx.js') }}`。

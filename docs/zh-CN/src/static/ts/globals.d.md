@@ -1,6 +1,6 @@
 # globals.d.ts
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/08/19
 
 TypeScript 全局类型声明文件，为 CDN 引入的第三方库（Chart.js、Sortable.js）、全局变量、跨模块共享函数以及后端 API 响应结构提供完整类型定义。
 
@@ -151,7 +151,10 @@ declare var currentLang: Lang;
 declare function setLang(lang: Lang): void;
 declare function t(key: string, ...args: string[]): string;
 declare function applyI18nDOM(): void;
+declare function renderErrorsTableHeader(): void;
 ```
+
+`renderErrorsTableHeader()` 定义于 `errors.ts`，用于按当前 `webConfig.errors.columns` 重新渲染错误日志表头；在 `web_config.ts` 的 `applyConfig()` 与字段编辑器中均会被调用。
 
 ## 跨模块函数声明
 
@@ -159,12 +162,11 @@ declare function applyI18nDOM(): void;
 declare function preloadInjectionDraftFromError(
   nodeName: string,
   taskData: unknown,
+  jumpToInjection?: boolean,
 ): void;
 ```
 
-`preloadInjectionDraftFromError` 定义于 `injection.ts`，由 `errors.ts` 中重注入列调用，用于将错误关联的任务数据预填到注入页编辑器。
-
-> ⚠️ **已变更**: 声明文件仅包含 2 个参数（`nodeName`、`taskData`），但 `injection.ts` 实际实现接受第 3 个参数 `switchTab`（默认 `true`）。调用方（`errors.ts`）传入 3 个参数（第 3 个为 `webConfig.errors.jumpToInjectionAfterRetry`）。声明文件与实际签名不一致，以实际实现为准。
+`preloadInjectionDraftFromError` 定义于 `injection.ts`，由 `errors.ts` 中重试列调用，用于将错误关联的任务数据预填到注入页编辑器。第 3 个参数 `jumpToInjection`（默认 `true`）控制是否在预填后自动切换到任务注入页签；`errors.ts` 传入 `webConfig.errors.jumpToInjectionAfterRetry` 以允许用户在设置中关闭该行为。
 
 ## 类型关系
 

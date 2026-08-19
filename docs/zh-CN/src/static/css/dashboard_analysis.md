@@ -1,8 +1,10 @@
 # dashboard_analysis.css
 
-> 📅 最后更新日期: 2026/05/23
+> 📅 最后更新日期: 2026/08/19
 
-负责仪表盘左下角“图分析信息”卡片的样式定义。
+负责仪表盘左下角"图分析信息"卡片的样式定义。
+
+> 注：图级执行模式（`graphMode`）字段取代了已移除的 `scheduleMode`，由 `dashboard_analysis.ts` 通过 `.analysis-value` 渲染，本 CSS 文件未引入新选择器。
 
 ## 布局设计 (`.analysis-info`)
 
@@ -18,4 +20,4 @@
 
 ## 关联模块
 
-- 数据渲染由 `dashboard_analysis.ts` 负责，该脚本会根据后端返回的分析结果（是否为 DAG 等）动态分配 `ok` 或 `warn` 类。
+- 数据渲染由 `dashboard_analysis.ts` 负责，该脚本会根据后端返回的分析结果（是否为 DAG、图级执行模式 `graphMode` 等）动态分配 `ok` 或 `warn` 类。

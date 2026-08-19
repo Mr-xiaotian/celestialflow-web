@@ -1,6 +1,6 @@
 # base.css
 
-> 📅 最后更新日期: 2026/06/28
+> 📅 最后更新日期: 2026/08/19
 
 负责系统的全局基础样式、暗黑模式切换、通用组件（卡片、选项卡、徽章）、响应式基础布局以及卡片布局编辑器模态窗样式。
 
@@ -92,6 +92,9 @@
 | `.btn-layout-save` | 保存按钮：蓝色填充、占 `80%` 宽度 |
 | `.btn-layout-reset` | 重置按钮：灰色描边、占 `20%` 宽度 |
 | `.btn-layout-editor` | 设置面板中的入口按钮：蓝色填充、圆角 |
+| `.error-columns-shell` | 错误日志页字段编辑器的两栏网格容器（`grid-template-columns: repeat(2, minmax(0, 1fr))`） |
+| `.error-columns-editor` | 错误日志页字段编辑器内的样式覆盖：底部按钮改为 `auto` 宽度且 `min-width: 7rem`；放置区 `min-height: 16rem` |
+| `.dark-theme .btn-layout-save` / `.dark-theme .btn-layout-reset` | 上述两按钮在暗黑模式下的统一深色样式（`--carbon-700` 背景、`--carbon-200` 文字、`--carbon-600` 边框） |
 
 ## 响应式规则
 
@@ -100,6 +103,8 @@
 在视口宽度 ≤ 2048px 时触发以下调整：
 - `h1` 标题宽度设为 `100%`，防止长标题溢出
 - `#theme-toggle` 主题切换按钮改为 `position: static`、`order: 3`，适应窄屏下的控制栏重排
+- `.error-columns-shell` 切换为单列（`grid-template-columns: 1fr`），适应错误日志页字段编辑器在窄屏下的单列展示
+- `.settings-panel` 改为顶部 `4rem` 处居中的固定定位弹层（移动端全宽适配）
 
 ## 暗黑模式适配
 

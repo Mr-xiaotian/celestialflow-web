@@ -1,6 +1,6 @@
 # dashboard_history.ts
 
-> 📅 最后更新日期: 2026/06/18
+> 📅 最后更新日期: 2026/08/19
 
 管理节点多指标历史数据的维护与折线图的初始化、重绘。历史数据完全在前端通过状态快照累积，不依赖独立的后端 API。
 
@@ -97,7 +97,7 @@ type ThemeColors = {
 
 ## 核心逻辑函数
 
-### `initChart(): void`
+### `initHistoryChart(): void`
 
 初始化（或重建）Chart.js 折线图实例。
 

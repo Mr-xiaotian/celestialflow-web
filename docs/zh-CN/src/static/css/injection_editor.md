@@ -1,6 +1,6 @@
 # injection_editor.css
 
-> 📅 最后更新日期: 2026/06/28
+> 📅 最后更新日期: 2026/08/19
 
 负责任务注入页右侧编辑器的样式定义，包括 JSON 输入区域、校验消息、操作按钮组。
 
@@ -32,9 +32,8 @@
 
 ## JSON 输入区 (`.json-input-section`)
 
-- **JSON 头部 (`.json-header`)**: 标签与"填入终止符模板"按钮左右分布。
+- **JSON 头部 (`.json-header`)**: 标签居左对齐的顶部行。
 - **JSON 标签 (`.json-label`)**: `0.75rem`，`font-weight: 500`。
-- **模板按钮 (`.example-btn`)**: 无背景文本按钮，`color: --cornflower-500`，悬停加深。
 - **JSON 编辑框 (`.json-textarea`)**:
   - 等宽字体（`Monaco, Menlo, monospace`），`min-height: 20rem`，支持垂直拉伸。
   - 聚焦时边框变为 `--cornflower-400`。

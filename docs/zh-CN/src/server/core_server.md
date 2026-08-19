@@ -1,6 +1,6 @@
 # TaskWebServer（core_server）
 
-> 最后更新日期: 2026/07/16
+> 最后更新日期: 2026/08/19
 
 TaskWeb 模块提供了一个基于 FastAPI 的轻量级 Web 服务器，用于实时监控和管理任务图的运行。它充当了 `TaskReporter` (后端) 与 Web UI (前端) 之间的中转站。
 
@@ -181,6 +181,17 @@ class ErrorsPageConfigModel(BaseModel):
     pageSize: int = 10
     sortOrder: str = "newest"
     jumpToInjectionAfterRetry: bool = True
+    columns: list[str] = Field(
+        default_factory=lambda: [
+            "index",
+            "event_id",
+            "message",
+            "stage",
+            "task",
+            "time",
+            "retry",
+        ]
+    )
 
 class InjectionPageConfigModel(BaseModel):
     showInjectableOnly: bool = True

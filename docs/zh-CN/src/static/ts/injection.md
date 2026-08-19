@@ -1,8 +1,8 @@
 # injection.ts
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/08/19
 
-任务手动注入模块。采用**单节点编辑 + 批量提交**的草稿式架构：每个节点维护独立 JSON 草稿，最终统一发送为 `{ node_name: [tasklist] }` 结构。
+任务手动注入模块。采用**单节点编辑 + 批量提交**的草稿式架构：每个节点维护独立 JSON 草稿，最终统一发送为 `{ node_name: [tasklist] }` 结构。终止符注入是独立的网络操作，**不会**与任务草稿混在一起。
 
 ## 类型定义
 
@@ -43,7 +43,7 @@ type ValidationState = "success" | "error" | "neutral";
 | `getSearchInput` | `HTMLInputElement` | `#search-input` |
 | `getInjectableOnlyToggle` | `HTMLInputElement` | `#injectable-only-toggle` |
 | `getJsonTextarea` | `HTMLTextAreaElement` | `#json-textarea` |
-| `getEditorButtons` | `HTMLButtonElement[]` | `#validate-json-btn`、`#format-json-btn`、`#clear-draft-btn`、`#fill-termination-btn` |
+| `getEditorButtons` | `HTMLButtonElement[]` | `#validate-json-btn`、`#format-json-btn`、`#clear-draft-btn`、`#inject-termination-btn` |
 
 ## 事件绑定
 
@@ -57,7 +57,7 @@ type ValidationState = "success" | "error" | "neutral";
 | `#validate-json-btn` | `click` | 校验当前草稿 |
 | `#format-json-btn` | `click` | 格式化当前草稿 |
 | `#clear-draft-btn` | `click` | 清空当前节点草稿 |
-| `#fill-termination-btn` | `click` | 在草稿末尾追加终止信号 |
+| `#inject-termination-btn` | `click` | 向当前选中节点单独发送终止信号（`handleInjectTermination`） |
 | `#submit-btn` | `click` | 批量提交所有草稿 |
 
 > 注：`#injectable-only-toggle` 的 `change` 事件在 `main.ts` 中统一绑定，切换后会调用 `renderInjectionPage()` 并保存配置。
@@ -154,10 +154,6 @@ type ValidationState = "success" | "error" | "neutral";
 
 清空当前节点的草稿与编辑区内容。
 
-### `fillTerminationDraft(): void`
-
-在当前节点草稿数组末尾追加字符串 `"TERMINATION_SIGNAL"`，用于向节点发送终止信号。
-
 ## 提交与加载状态
 
 ### `handleSubmit(): Promise<void>`
@@ -170,13 +166,25 @@ type ValidationState = "success" | "error" | "neutral";
 5. 通过 `POST /api/push_injection_tasks` 发送 JSON 载荷。
 6. 成功后清空草稿并刷新页面；失败时显示通用失败提示。
 
+### `handleInjectTermination(): Promise<void>`
+
+向当前选中节点单独注入终止信号。该操作是**独立**的网络请求，**不会**修改任何节点的草稿内容：
+
+- 通过 `POST /api/push_injection_terminations` 提交当前节点名。
+- 成功显示 `injection.terminationInjected`，失败显示 `injection.terminationInjectFailed`，均带节点名占位参数。
+- 提交过程中通过 `setTerminationButtonLoading(true)` 锁定按钮，避免重复触发。
+
 ### `setButtonLoading(loading: boolean): void`
 
 切换提交按钮的加载状态。加载中时显示旋转指示器（`.spinner`）和 `injection.submitting` 文案，并禁用按钮。
 
+### `setTerminationButtonLoading(loading: boolean): void`
+
+切换终止符注入按钮的加载状态。加载中时显示 `injection.terminationInjecting` 文案并禁用按钮；结束后恢复 `injection.injectTermination` 文案，并在未选中节点时重新禁用。
+
 ### `refreshInjectionLocalizedText(): void`
 
-语言切换后重绘注入页中的动态文本，包括校验提示、状态提示和提交按钮文案。
+语言切换后重绘注入页中的动态文本，包括校验提示、状态提示、终止符按钮文案和提交按钮文案。
 
 ## 核心流程
 
@@ -193,7 +201,6 @@ flowchart TD
     H -->|校验| I[validateCurrentDraft]
     H -->|格式化| J[formatCurrentDraft]
     H -->|清空| K[clearCurrentDraft]
-    H -->|终止符| L[fillTerminationDraft]
 
     G --> M[handleSubmit]
     M --> N[buildPendingInjectionPayload]
@@ -201,6 +208,11 @@ flowchart TD
     O -->|是| P[showStatus 错误提示]
     O -->|否| Q[POST /api/push_injection_tasks]
     Q --> R[showStatus 成功反馈]
+
+    B --> T[点击 inject-termination-btn]
+    T --> U[handleInjectTermination]
+    U --> V[POST /api/push_injection_terminations]
+    V --> W[showStatus 成功/失败反馈]
 ```
 
 ## 使用示例
@@ -225,6 +237,10 @@ const { payload, invalidNode, invalidReason } = buildPendingInjectionPayload();
 
 // 提交草稿
 await handleSubmit();
+
+// 单独向当前选中节点注入终止符（不会修改草稿）
+await selectNode("StageA");
+await handleInjectTermination();
 
 // 从错误页预填草稿（由 errors.ts 调用）
 preloadInjectionDraftFromError("StageA", { id: 999 }, true);

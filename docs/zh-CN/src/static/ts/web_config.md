@@ -1,6 +1,6 @@
 # web_config.ts
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/08/19
 
 管理 Web 前端的配置加载、归一化、保存和应用。配置采用**分组结构**（`global`、`dashboard`、`errors`、`injection`），同时兼容旧版扁平格式的自动迁移。
 
@@ -29,6 +29,7 @@ type WebErrorsConfig = {
   pageSize: number;
   sortOrder: "newest" | "oldest";
   jumpToInjectionAfterRetry: boolean;
+  columns: ErrorColumnKey[];
 };
 
 type WebInjectionConfig = {
@@ -67,11 +68,12 @@ type LegacyWebConfig = {
 | `webConfig` | `WebConfig` | 当前运行时的配置对象，模块加载时由 `DEFAULT_WEB_CONFIG` 初始化 |
 | `saveConfigPending` | `boolean` | 是否还有新的配置变更等待落盘 |
 | `saveConfigPromise` | `Promise<boolean> \| null` | 当前正在执行的保存队列 Promise |
-| `PANEL_SELECTOR_MAP` | `Record<DashboardColumnKey, string>` | 面板键到 CSS 选择器的映射 |
-| `CARD_TEMPLATES` | `Record<string, string>` | 卡片 ID 到 HTML 模板的映射（mermaid, analysis, status, progress, error-types, summary） |
-| `CARD_META` | `Record<string, string>` | 卡片 ID 到 i18n 标签键的映射（含 error-types） |
-| `ALL_CARD_IDS` | `string[]` | 由 `Object.keys(CARD_TEMPLATES)` 自动生成的标准卡片 ID 列表 |
 | `DEFAULT_WEB_CONFIG` | `WebConfig` | 默认配置模板，用于初始化和降级兜底 |
+| `DEFAULT_ERROR_COLUMNS` | `ErrorColumnKey[]` | 错误日志表格的默认字段顺序，与 `DEFAULT_WEB_CONFIG.errors.columns` 保持一致 |
+| `PANEL_SELECTOR_MAP` | `Record<DashboardColumnKey, string>` | 面板键到 CSS 选择器的映射（`left` → `.left-panel` 等） |
+| `CARD_TEMPLATES` | `Record<string, string>` | 卡片 ID 到 HTML 模板的映射（`mermaid`、`analysis`、`status`、`progress`、`error-types`、`summary`） |
+| `CARD_META` | `Record<string, string>` | 卡片 ID 到 i18n 标签键的映射（含 `error-types`） |
+| `ALL_CARD_IDS` | `string[]` | 由 `Object.keys(CARD_TEMPLATES)` 自动生成的标准卡片 ID 列表 |
 
 ## 函数
 
@@ -114,6 +116,12 @@ type LegacyWebConfig = {
 
 ---
 
+### `normalizeErrorColumns(rawColumns?: ErrorColumnKey[] | null): ErrorColumnKey[]`
+
+去重并仅保留 `DEFAULT_ERROR_COLUMNS` 支持的错误表格字段顺序。返回的数组可直接作为 `webConfig.errors.columns` 写入。
+
+---
+
 ### `applyConfig(): void`
 
 将 `webConfig` 中的各项设置同步到页面：
@@ -121,7 +129,8 @@ type LegacyWebConfig = {
 1. **语言**: 应用 `global.language` 并更新全页 `data-i18n` 元素。
 2. **主题**: 根据 `global.theme` 切换 `dark-theme` 类。
 3. **参数同步**: 将刷新率、历史长度、每页条数、增量开关等同步到对应的 DOM 控件。
-4. **布局**: 调用 `applyDashboardLayout()` 重排卡片。
+4. **错误表格字段**: 读取 `errors.columns`（已通过 `normalizeErrorColumns` 归一化），调用 `renderErrorsTableHeader()` 重绘表头。
+5. **布局**: 调用 `applyDashboardLayout()` 重排卡片。
 
 ---
 
@@ -159,6 +168,7 @@ const DEFAULT_WEB_CONFIG: WebConfig = {
     pageSize: 50,
     sortOrder: "newest",
     jumpToInjectionAfterRetry: true,
+    columns: ["index", "event_id", "message", "stage", "task", "time", "retry"],
   },
   injection: {
     showInjectableOnly: true,

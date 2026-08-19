@@ -1,6 +1,6 @@
 # Pull 路由（GET）— `core_pull`
 
-> 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/08/19
 
 ## 作用
 
@@ -67,6 +67,8 @@
 | `node` | `str` | `""` | 按节点名称过滤 |
 | `keyword` | `str` | `""` | 按关键词过滤 |
 | `sort_order` | `str` | `"newest"` | 排序方式，支持 `newest` / `oldest` |
+
+**返回：** `{"rev": int, "page": int, "page_size": int, "total": int, "total_pages": int, "sort_order": str, "data": list | None}`，其中 `page` 会被夹到 `[1, total_pages]` 范围内；`sort_order` 是经过 `normalize_errors_query` 归一化后的值（`newest` / `oldest`）。
 
 调用流程：
 

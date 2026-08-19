@@ -1,6 +1,6 @@
 # Web 服务 API 测试 (test_server.py)
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/08/19
 
 ## 作用
 
@@ -90,22 +90,22 @@
 
 ```bash
 # 全部执行
-pytest tests/test_server.py -v
+uv run pytest tests/test_server.py -v
 
 # 仅运行状态同步测试
-pytest tests/test_server.py -k "status" -v
+uv run pytest tests/test_server.py -k "status" -v
 
 # 仅运行任务注入测试
-pytest tests/test_server.py -k "injection" -v
+uv run pytest tests/test_server.py -k "injection" -v
 
 # 仅运行错误管理测试
-pytest tests/test_server.py -k "errors" -v
+uv run pytest tests/test_server.py -k "errors" -v
 
 # 仅运行配置拉取测试
-pytest tests/test_server.py -k "config" -v
+uv run pytest tests/test_server.py -k "config" -v
 
 # 仅运行错误类型聚合测试
-pytest tests/test_server.py -k "error_type" -v
+uv run pytest tests/test_server.py -k "error_type" -v
 ```
 
 ## 重要细节

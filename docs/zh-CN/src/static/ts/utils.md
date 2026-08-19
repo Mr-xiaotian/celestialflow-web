@@ -1,6 +1,6 @@
 # utils.ts
 
-> 📅 最后更新日期: 2026/06/11
+> 📅 最后更新日期: 2026/08/19
 
 包含 Web 前端通用的格式化工具、UI 辅助逻辑、DOM 操作封装及环境检测函数。
 
@@ -43,7 +43,7 @@
 ### `renderLabelWithTooltip(labelKey: string, tooltipKey: string): string`
 渲染带提示气泡的标签 HTML。包含一个 `i` 按钮（`.tooltip-trigger`），悬停或聚焦时显示翻译后的提示文案（`.tooltip-bubble`）。
 
-> 此函数被 `dashboard_statuses.ts` 和 `dashboard_analysis.ts` 广泛使用，用于为"阶段模式"、"调度模式"等专业术语提供即时解释。
+> 此函数被 `dashboard_statuses.ts` 和 `dashboard_analysis.ts` 广泛使用，用于为节点 `func_name`（函数名）、`execution_mode`（运行模式）、`graph_mode`（图模式）、`total_tasks_pending`（全局等待）等专业术语提供即时解释。
 
 ---
 

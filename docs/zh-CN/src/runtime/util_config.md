@@ -1,8 +1,8 @@
 # util_config
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/08/19
 
-Web 模块的配置文件读写工具，负责 `config.json` 的持久化管理。无线程锁保护——线程安全由上层调用方（`core_server.py` 的 `push_config`）保证。
+Web 模块的配置文件读写工具，负责 `config.json` 的持久化管理。无线程锁保护——线程安全由上层调用方（`routes/core_push.py` 的 `push_config` 路由，配合 `server.TaskWebServer.config_lock`）保证。
 
 ## load_config
 
@@ -22,16 +22,16 @@ def save_config(config: dict[str, Any], config_path: str) -> bool:
 ```
 
 - 以 `w` 模式写入，`indent=4`、`ensure_ascii=False` 保证可读性与中文支持。
-- 无内置线程锁，多并发安全性由调用方 `core_server.py` 的 `push_config` 路由处理。
+- 无内置线程锁，多并发安全性由调用方 `routes/core_push.py` 的 `push_config` 路由（使用 `TaskWebServer.config_lock`）处理。
 - 捕获所有 `Exception` 并在失败时打印错误信息、返回 `False`。
 
 ## 调用关系
 
 ```mermaid
 flowchart LR
-    A[push_config<br/>core_server.py] --> B[save_config]
+    A[push_config<br/>routes/core_push.py] --> B[save_config]
     B --> C["config.json"]
-    A --> D[threading.Lock<br/>线程安全]
+    A --> D[TaskWebServer.config_lock<br/>线程安全]
 ```
 
 | 函数 | 线程安全 | 异常处理 |
