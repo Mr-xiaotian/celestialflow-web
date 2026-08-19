@@ -1,6 +1,6 @@
 # dashboard_statuses.ts
 
-> 📅 最后更新日期: 2026/08/18
+> 📅 最后更新日期: 2026/08/19
 
 管理各节点运行状态数据的加载、同步与仪表盘状态卡片的动态渲染。提供运行时间彩色分段渲染能力。
 
@@ -40,6 +40,12 @@ type ElapsedSegment = {
 | `lastNodeStatuses` | `Record<string, NodeStatus>` | 上一轮状态快照，用于计算增量显示 |
 | `statusRev` | `number` | 上次拉取的版本号，初始化 `-1`，用于增量拉取 |
 | `statusesRequestSeq` | `number` | 请求序列号，防止旧状态响应覆盖新结果 |
+
+## 结构联动函数
+
+### `getNodeFuncName(nodeName: string): string`
+
+从全局 `structureData.nodes` 中读取节点的 `func_name`，用于在状态卡中补充展示函数名。若结构数据尚未加载，则返回 `"-"` 占位。
 
 ## 配置驱动函数
 
@@ -118,6 +124,7 @@ type ElapsedSegment = {
 - **实时增量**: 对比 `lastNodeStatuses` 自动计算成功/失败/等待/重复任务的增量并彩色显示。
 - **状态标记**: 卡片左侧边框颜色反映节点状态（蓝色=运行中 `status-running`，灰色=已停止 `status-stopped`）。
 - **字段同步**: 状态卡只依赖后端当前仍会上报的字段，不再展示已从 reporter 移除的 `stage_mode`。
+- **结构联动**: 卡片会结合 `dashboard_structure.ts` 提供的结构数据，额外展示当前节点绑定的函数名 `func_name`。
 - **运行时间彩色分段**: 调用 `formatElapsedDuration()` 为 `elapsed_time` 生成基于任务成功/失败/重复比例染色的 HTML。
 - **四段式进度条**: 直观展示成功（绿）、错误（红）、重复（黄）、等待（灰）的比例。
 - **时间预估**: 显示已运行时间、预计剩余时间、平均任务耗时和进度百分比。
