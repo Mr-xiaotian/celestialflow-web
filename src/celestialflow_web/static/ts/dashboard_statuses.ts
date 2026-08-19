@@ -36,6 +36,15 @@ let statusesRequestSeq = 0; // 请求序列号，防止旧状态响应覆盖新�
 const dashboardGrid = document.getElementById("dashboard-grid") as HTMLElement;
 
 /**
+ * 从结构数据中获取节点函数名。
+ * @param {string} nodeName - 节点名称
+ * @returns {string} 节点函数名，结构未就绪时返回 "-"
+ */
+function getNodeFuncName(nodeName: string): string {
+  return structureData.nodes[nodeName]?.func_name || "-";
+}
+
+/**
  * 获取节点状态卡当前采用的等待值字段。
  * @returns {"tasks_pending" | "total_tasks_pending"} 当前等待统计字段。
  */
@@ -256,6 +265,7 @@ function renderDashboard(): void {
     const displayPending = getDisplayPending(data); // 当前等待值展示字段
     const lastDisplayPending = getDisplayPending(last); // 上一轮等待值展示字段
     const displayRemainingTime = getDisplayRemainingTime(data); // 当前剩余时间展示字段
+    const funcName = getNodeFuncName(node); // 当前节点函数名
     const addSucceeded = data.tasks_succeeded - (last.tasks_succeeded || 0); // 成功数增量
     const addPending = displayPending - lastDisplayPending; // 等待数增量
     const addFailed = data.tasks_failed - (last.tasks_failed || 0); // 失败数增量
@@ -316,6 +326,7 @@ function renderDashboard(): void {
               "text-delta-duplicate",
               "text-delta-duplicate",
             )}</div></div>
+            <div><div class="stat-label">${renderLabelWithTooltip("status.funcName", "status.funcNameHelp")}</div><div class="stat-value">${escapeHtml(funcName)}</div></div>
             <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(executionModeDesc)}</div></div>
           </div>
           <div class="text-sm text-carbon">${t("status.startTime")}${formatTimestamp(data.start_time)}</div>
