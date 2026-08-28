@@ -69,6 +69,11 @@ function renderAnalysisInfo(): void {
     </div>
 
     <div class="analysis-row">
+      <span class="analysis-label">${renderLabelWithTooltip("analysis.graphMode", "analysis.graphModeHelp")}</span>
+      <span class="analysis-value">${escapeHtml(graphMode)}</span>
+    </div>
+
+    <div class="analysis-row">
       <span class="analysis-label">${t("analysis.startTime")}</span>
       <span class="analysis-value">${startTimeText}</span>
     </div>
@@ -83,11 +88,6 @@ function renderAnalysisInfo(): void {
       <span class="analysis-value ${isDAG ? "ok" : "warn"}">
         ${isDAG ? t("analysis.dagYes") : t("analysis.dagNo")}
       </span>
-    </div>
-
-    <div class="analysis-row">
-      <span class="analysis-label">${renderLabelWithTooltip("analysis.graphMode", "analysis.graphModeHelp")}</span>
-      <span class="analysis-value">${escapeHtml(graphMode)}</span>
     </div>
 
     <div class="analysis-row">
