@@ -106,7 +106,13 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         """
         if not server.is_current_graph(data.graph_id):
             return {"ok": False}
-        server.update_structure_store(data.structure)
+        server.update_structure_store(
+            {
+                "nodes": data.nodes,
+                "edges": data.edges,
+                "source_nodes": data.source_nodes,
+            }
+        )
         return {"ok": True}
 
     @router.post("/api/push_analysis")
