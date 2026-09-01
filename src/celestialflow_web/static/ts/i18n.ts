@@ -135,6 +135,9 @@ const translations: Record<Lang, Record<string, string>> = {
     "status.executionMode": "运行模式",
     "status.executionModeHelp":
       "节点内部处理任务的方式。serial 为串行执行，thread 为线程池并发，async 为异步并发。",
+    "status.parallelism": "并行数量",
+    "status.parallelismHelp":
+      "节点内并发处理任务的工作者数量上限。serial 串行模式下不适用。",
     "status.startTime": "开始时间: ",
     "status.completionRate": "任务完成率",
     "structure.noData": "暂无结构数据",
@@ -294,6 +297,9 @@ const translations: Record<Lang, Record<string, string>> = {
     "status.executionMode": "Exec Mode",
     "status.executionModeHelp":
       "How tasks are processed inside the node. serial runs sequentially, thread uses a worker pool, async uses asynchronous concurrency.",
+    "status.parallelism": "Parallelism",
+    "status.parallelismHelp":
+      "The maximum number of workers processing tasks inside the node. Not applicable in serial mode.",
     "status.startTime": "Start Time: ",
     "status.completionRate": "Completion Rate",
     "structure.noData": "No structure data",
@@ -452,6 +458,9 @@ const translations: Record<Lang, Record<string, string>> = {
     "status.executionMode": "実行モード",
     "status.executionModeHelp":
       "ノード内部でのタスク処理方式です。serial は直列、thread はスレッドプール並列、async は非同期並列です。",
+    "status.parallelism": "並列数",
+    "status.parallelismHelp":
+      "ノード内でタスクを並列処理するワーカー数の上限です。serial 直列モードでは適用されません。",
     "status.startTime": "開始時刻: ",
     "status.completionRate": "タスク完了率",
     "structure.noData": "構造データなし",

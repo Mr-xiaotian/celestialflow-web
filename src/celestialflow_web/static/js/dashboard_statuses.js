@@ -185,10 +185,8 @@ function renderDashboard() {
         const addPending = displayPending - lastDisplayPending; // 等待数增量
         const addFailed = data.tasks_failed - (last.tasks_failed || 0); // 失败数增量
         const addDuplicated = data.tasks_duplicated - (last.tasks_duplicated || 0); // 重复数增量
-        // 计算执行模式描述
-        const executionModeDesc = data.execution_mode === "serial"
-            ? data.execution_mode
-            : `${data.execution_mode}-${data.max_workers}`;
+        // 并行数量：serial 串行模式无并发概念，显示 "-"
+        const parallelismText = data.execution_mode === "serial" ? "-" : String(data.max_workers);
         // 计算进度
         const total = data.tasks_processed + displayPending; // 已处理 + 待处理构成总量
         const progressRatio = total === 0 ? 0 : Math.floor((data.tasks_processed / total) * 100);
@@ -216,7 +214,8 @@ function renderDashboard() {
             <div><div class="stat-label">${getPendingLabelHtml()}</div><div class="stat-value text-pending">${formatWithDelta(displayPending, addPending, "text-delta-pending", "text-delta-pending")}</div></div>
             <div><div class="stat-label">${t("status.error")}</div><div class="stat-value text-error error-clickable" data-node="${escapeHtml(node)}">${formatWithDelta(data.tasks_failed, addFailed, "text-delta-error", "text-delta-error")}</div></div>
             <div><div class="stat-label">${t("status.duplicated")}</div><div class="stat-value text-duplicate">${formatWithDelta(data.tasks_duplicated, addDuplicated, "text-delta-duplicate", "text-delta-duplicate")}</div></div>
-            <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(executionModeDesc)}</div></div>
+            <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(data.execution_mode)}</div></div>
+            <div><div class="stat-label">${renderLabelWithTooltip("status.parallelism", "status.parallelismHelp")}</div><div class="stat-value">${escapeHtml(parallelismText)}</div></div>
           </div>
           <div class="text-sm text-carbon">${t("status.startTime")}${formatTimestamp(data.start_time)}</div>
           <div class="progress-container">
