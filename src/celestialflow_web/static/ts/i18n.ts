@@ -132,9 +132,6 @@ const translations: Record<Lang, Record<string, string>> = {
       "基于图结构全局估计后，归属于当前节点链路的总待处理任务量。",
     "status.error": "错误",
     "status.duplicated": "重复",
-    "status.funcName": "函数名",
-    "status.funcNameHelp":
-      "节点绑定的执行函数名称，用于区分当前卡片对应的处理逻辑。",
     "status.executionMode": "运行模式",
     "status.executionModeHelp":
       "节点内部处理任务的方式。serial 为串行执行，thread 为线程池并发，async 为异步并发。",
@@ -294,9 +291,6 @@ const translations: Record<Lang, Record<string, string>> = {
       "The total pending workload attributed to this node path based on a graph-wide estimate.",
     "status.error": "Error",
     "status.duplicated": "Duplicated",
-    "status.funcName": "Function",
-    "status.funcNameHelp":
-      "The name of the function bound to this node, used to identify the processing logic behind the card.",
     "status.executionMode": "Exec Mode",
     "status.executionModeHelp":
       "How tasks are processed inside the node. serial runs sequentially, thread uses a worker pool, async uses asynchronous concurrency.",
@@ -455,9 +449,6 @@ const translations: Record<Lang, Record<string, string>> = {
       "グラフ全体の推定に基づき、このノード系統に割り当てられる総待機タスク量です。",
     "status.error": "エラー",
     "status.duplicated": "重複",
-    "status.funcName": "関数名",
-    "status.funcNameHelp":
-      "このノードに紐づく実行関数名で、カードが表す処理ロジックを識別するために使います。",
     "status.executionMode": "実行モード",
     "status.executionModeHelp":
       "ノード内部でのタスク処理方式です。serial は直列、thread はスレッドプール並列、async は非同期並列です。",

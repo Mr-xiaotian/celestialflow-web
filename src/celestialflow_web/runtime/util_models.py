@@ -10,7 +10,7 @@ class StructureModel(BaseModel):
     """任务结构数据模型"""
 
     graph_id: str = ""
-    nodes: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    nodes: list[str] = Field(default_factory=list)
     edges: dict[str, list[str]] = Field(default_factory=dict)
     source_nodes: list[str] = Field(default_factory=list)
 

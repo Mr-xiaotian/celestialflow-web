@@ -67,7 +67,7 @@ class TaskWebServer:
         self.status_store: dict[str, dict[str, Any]] = {}
         self.status_timestamp: float = 0.0
         self.structure_store: dict[str, Any] = {
-            "nodes": {},
+            "nodes": [],
             "edges": {},
             "source_nodes": [],
         }
@@ -132,7 +132,7 @@ class TaskWebServer:
             self.store_revs["status"] += 1
         with self.structure_lock:
             self.structure_store = {
-                "nodes": {},
+                "nodes": [],
                 "edges": {},
                 "source_nodes": [],
             }

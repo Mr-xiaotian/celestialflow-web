@@ -5,21 +5,15 @@
 
 // 全局状态
 let structureData: StructureGraph = {
-  nodes: {},
+  nodes: [],
   edges: {},
   source_nodes: [],
 }; // 任务结构图数据（有向图）
 let structureRev = -1; // 数据版本号，用于增量拉取
 let structureRequestSeq = 0; // 请求序列号，防止旧结构响应覆盖新结果
 
-type StructureNodeMeta = {
-  func_name: string; // 节点函数名，用于推导节点类型
-  execution_mode: string; // 节点执行模式
-  max_workers: number; // 并发 worker 数上限
-};
-
 type StructureGraph = {
-  nodes: Record<string, StructureNodeMeta>; // 节点名到元信息的映射
+  nodes: string[]; // 全量节点名列表
   edges: Record<string, string[]>; // 有向边邻接表
   source_nodes: string[]; // 入度为 0 的源节点列表
 };
@@ -55,20 +49,17 @@ function getNodeId(nodeName: string): string {
 }
 
 /**
- * 根据节点元信息推导 Mermaid 形状类型
- * @param {StructureNodeMeta} nodeMeta - 节点元信息
+ * 根据节点类名推导 Mermaid 形状类型
+ * 类名来自运行时状态快照（snapshot 的 class_name）；结构数据不再携带执行层信息。
+ * @param {string} [className] - 节点类名（如 TaskSplitter / TaskRouter），节点未运行时为空
  * @returns {string} Mermaid 形状名称
  */
-function getNodeShape(nodeMeta: StructureNodeMeta): string {
-  switch (nodeMeta.func_name) {
-    case "_split":
+function getNodeShape(className?: string): string {
+  switch (className) {
+    case "TaskSplitter":
       return "subgraph";
-    case "_route":
+    case "TaskRouter":
       return "rhombus";
-    case "_transport":
-    case "_source":
-    case "_ack":
-      return "parallelogram";
     default:
       return "box";
   }
@@ -121,8 +112,8 @@ function getShapeWrappedLabel(label: string, shape: string = "box"): string {
  * @returns {void}
  */
 function renderMermaidStructure(statuses: Record<string, NodeStatus> = {}): void {
-  const { nodes = {}, edges = {}, source_nodes = [] } = structureData || {}; // 当前结构图主数据
-  const nodeNames = Object.keys(nodes); // 全量节点名，供空状态判断和遍历使用
+  const { nodes = [], edges = {}, source_nodes = [] } = structureData || {}; // 当前结构图主数据
+  const nodeNames = nodes; // 全量节点名，供空状态判断和遍历使用
 
   if (!nodeNames.length) {
     const old = document.getElementById("mermaid-container");
@@ -160,17 +151,19 @@ linkStyle default stroke:#999,stroke-width:1.5px;
 `;
 
   const orderedNodeNames = [
-    ...source_nodes.filter((name) => name in nodes),
+    ...source_nodes.filter((name) => nodes.includes(name)),
     ...nodeNames.filter((name) => !source_nodes.includes(name)),
   ]; // 优先把源节点放前面，增强拓扑图可读性
 
   // 先生成节点定义和节点样式，再生成边，便于后续统一拼接 Mermaid 代码。
   for (const nodeName of orderedNodeNames) {
-    const nodeMeta = nodes[nodeName];
     const id = getNodeId(nodeName);
-    nodeLabels.set(id, getShapeWrappedLabel(nodeName, getNodeShape(nodeMeta)));
+    const statusInfo = statuses[nodeName]; // 当前节点的运行态，用于上色和形状推导
+    nodeLabels.set(
+      id,
+      getShapeWrappedLabel(nodeName, getNodeShape(statusInfo?.class_name)),
+    );
 
-    const statusInfo = statuses[nodeName]; // 当前节点的运行态，用于上色
     let statusClass = "whiteNode"; // 默认样式为普通白色节点
     if (statusInfo) {
       if (statusInfo.status === 1) statusClass = "greenNode";
@@ -181,11 +174,11 @@ linkStyle default stroke:#999,stroke-width:1.5px;
 
   // 再生成边定义，并按配置决定是否在边上显示本轮成功增量。
   for (const [fromName, toNames] of Object.entries(edges)) {
-    if (!(fromName in nodes)) continue;
+    if (!nodes.includes(fromName)) continue;
     const fromId = getNodeId(fromName);
     const statusInfo = statuses[fromName];
     for (const toName of toNames || []) {
-      if (!(toName in nodes)) continue;
+      if (!nodes.includes(toName)) continue;
       const toId = getNodeId(toName);
 
       let edgeLabel = ""; // Mermaid 边标签，默认空字符串
