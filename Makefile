@@ -1,7 +1,7 @@
 .PHONY: build watch check
 
 FRONTEND_DIR := src/celestialflow_web
-TSC := $(FRONTEND_DIR)/node_modules/.bin/tsc
+TSC := node $(FRONTEND_DIR)/node_modules/typescript/bin/tsc
 TSCONFIG := $(FRONTEND_DIR)/tsconfig.json
 
 build:
