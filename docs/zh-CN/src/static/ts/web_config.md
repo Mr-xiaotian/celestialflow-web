@@ -1,10 +1,8 @@
 # web_config.ts
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/01
 
 管理 Web 前端的配置加载、归一化、保存和应用。配置采用**分组结构**（`global`、`dashboard`、`errors`、`injection`），同时兼容旧版扁平格式的自动迁移。
-
-> ⚠️ **已变更**: 配置结构已从旧版扁平 `WebConfig` 重构为分组格式。新增 `LegacyWebConfig` 兼容类型、`isGroupedWebConfig()` 检测函数和 `normalizeDashboardLayout()` 布局归一化函数。
 
 ## 类型定义
 
@@ -112,7 +110,7 @@ type LegacyWebConfig = {
 
 ### `normalizeDashboardLayout(layout?: Partial<DashboardLayout>): DashboardLayout`
 
-确保仪表盘布局包含所有三栏键（`left`、`middle`、`right`），缺失时用空数组填充。
+确保仪表盘布局包含全部三栏（`left`、`middle`、`right`），以 `DEFAULT_WEB_CONFIG.dashboard.layout` 的默认卡片顺序为兜底，传入的 `layout` 中存在的键会覆盖默认值。
 
 ---
 

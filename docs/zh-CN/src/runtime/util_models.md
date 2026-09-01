@@ -1,6 +1,6 @@
 # util_models
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/01
 
 ## 作用
 
@@ -10,12 +10,14 @@
 
 ### StructureModel
 
-任务结构数据模型，表示任务图的结构信息。
+任务结构数据模型，表示任务图的结构信息。各字段独立扁平化存储，不再使用嵌套 `structure` 字典。
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `graph_id` | `str` | 图实例标识，默认 `""`；用于 Reporter 端 graph 上下文校验 |
-| `structure` | `dict[str, Any]` | 结构快照字典，通常包含 `nodes`、`edges`、`source_nodes` |
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `graph_id` | `str` | `""` | 图实例标识，用于 Reporter 端 graph 上下文校验 |
+| `nodes` | `dict[str, dict[str, Any]]` | `{}` | 节点字典，键为节点名，值为节点属性字典 |
+| `edges` | `dict[str, list[str]]` | `{}` | 边字典，键为源节点名，值为目标节点名列表 |
+| `source_nodes` | `list[str]` | `[]` | 源节点（入口节点）名称列表 |
 
 ### StatusModel
 
@@ -159,32 +161,37 @@ from celestialflow_web.runtime.util_models import (
 )
 
 # --- WebConfigModel 使用 (嵌套结构) ---
-config = WebConfigModel(
-    global=GlobalConfigModel(
-        theme="dark",
-        autoRefreshEnabled=True,
-        refreshInterval=5000,
-        language="zh-CN",
-    ),
-    dashboard=DashboardPageConfigModel(
-        historyLimit=20,
-        showStructureEdgeDelta=False,
-        useTotalPendingInStatus=False,
-        layout=DashboardConfigModel(
-            left=["mermaid"],
-            middle=["status"],
-            right=["progress"],
-        ),
-    ),
-    errors=ErrorsPageConfigModel(
-        pageSize=10,
-        sortOrder="newest",
-        jumpToInjectionAfterRetry=True,
-        columns=["index", "event_id", "message", "stage", "task", "time", "retry"],
-    ),
-    injection=InjectionPageConfigModel(
-        showInjectableOnly=True,
-    ),
+# 由于 `global` 是 Python 保留字，WebConfigModel 只能通过 model_validate()
+# 或 Pydantic 的 alias 路径构造；直接 WebConfigModel(global_=...) 会因
+# model_config 未启用 populate_by_name 而失败（仅在 __init__ 阶段）。
+config = WebConfigModel.model_validate(
+    {
+        "global": GlobalConfigModel(
+            theme="dark",
+            autoRefreshEnabled=True,
+            refreshInterval=5000,
+            language="zh-CN",
+        ).model_dump(),
+        "dashboard": DashboardPageConfigModel(
+            historyLimit=20,
+            showStructureEdgeDelta=False,
+            useTotalPendingInStatus=False,
+            layout=DashboardConfigModel(
+                left=["mermaid"],
+                middle=["status"],
+                right=["progress"],
+            ),
+        ).model_dump(),
+        "errors": ErrorsPageConfigModel(
+            pageSize=10,
+            sortOrder="newest",
+            jumpToInjectionAfterRetry=True,
+            columns=["index", "event_id", "message", "stage", "task", "time", "retry"],
+        ).model_dump(),
+        "injection": InjectionPageConfigModel(
+            showInjectableOnly=True,
+        ).model_dump(),
+    }
 )
 print(f"主题: {config.global_.theme}")
 print(f"仪表盘布局: {config.dashboard.layout.model_dump()}")

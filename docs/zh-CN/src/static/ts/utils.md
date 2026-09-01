@@ -1,10 +1,8 @@
 # utils.ts
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/01
 
 包含 Web 前端通用的格式化工具、UI 辅助逻辑、DOM 操作封装及环境检测函数。
-
-> ⚠️ **已变更**: 旧版文档提及的 `renderLocalTime()` 函数实际不存在于此文件中。新增了 `renderLabelWithTooltip()`、`switchToInjectionTab()`、`calcRemainTime()`、`format_repr()` 四个函数。
 
 ## 数值与时间格式化
 

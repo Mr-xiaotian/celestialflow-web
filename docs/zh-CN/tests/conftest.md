@@ -1,6 +1,6 @@
 # Web 测试配置 (conftest.py)
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/01
 
 ## 作用
 为 `tests/` 目录下的测试用例提供 Web 服务器和 HTTP 客户端的 Pytest Fixture，模拟真实的前后端交互环境。
@@ -15,19 +15,11 @@
 
 ## 使用示例
 ```python
-def test_api(client):
-    response = client.get("/api/endpoint")
+def test_index_page(client):
+    """验证首页可访问并包含关键容器。"""
+    response = client.get("/")
     assert response.status_code == 200
-```
-
-## 运行方式
-
-```bash
-# 全部执行
-uv run pytest tests -v
-
-# 仅运行 server 集成测试
-uv run pytest tests/test_server.py -v
+    assert 'id="dashboard"' in response.text
 ```
 
 ## 注意事项

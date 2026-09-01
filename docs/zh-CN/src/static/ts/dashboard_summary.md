@@ -1,10 +1,8 @@
 # dashboard_summary.ts
 
-> 📅 最后更新日期: 2026/06/11
+> 📅 最后更新日期: 2026/09/01
 
 管理全局汇总统计数据的渲染。**汇总完全由前端基于 `nodeStatuses` 实时聚合计算**，不依赖独立的后端 API。
-
-> ⚠️ **已变更**: 旧版文档提及的 `loadSummary()` 函数和 `/api/pull_summary` 端点已移除。当前版本中，`renderSummary()` 直接从 `nodeStatuses`（由 `dashboard_statuses.ts` 维护）中聚合所有统计项。
 
 ## 全局变量
 

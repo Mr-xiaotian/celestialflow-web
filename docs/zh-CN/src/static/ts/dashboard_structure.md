@@ -1,10 +1,8 @@
 # dashboard_structure.ts
 
-> 📅 最后更新日期: 2026/08/18
+> 📅 最后更新日期: 2026/09/01
 
 管理任务图结构数据的加载与 Mermaid 流程图的可视化渲染，支持基于节点状态的实时着色和边增量显示。
-
-> ⚠️ **已变更**: `structureData` 类型已从旧版的 `any[]`（数组）变更为 `StructureGraph` 对象类型（含 `nodes`、`edges`、`source_nodes`）。新增了 `getNodeShape()` 函数和完整的类型定义。
 
 ## 类型定义
 

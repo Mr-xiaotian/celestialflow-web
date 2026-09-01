@@ -1,6 +1,6 @@
 # util_cal
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/09/01
 
 Web 模块的轻量计算与查询参数归一化工具。
 
@@ -31,7 +31,7 @@ def normalize_errors_query(
 
 ## 使用示例
 
-### 日历/时间计算函数的使用示例
+### 刷新间隔换算函数的使用示例
 
 ```python
 from celestialflow_web.runtime.util_cal import cal_interval

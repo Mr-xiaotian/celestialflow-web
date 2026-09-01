@@ -1,10 +1,8 @@
 # index.html
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/01
 
 Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
-
-> ⚠️ **已变更**: 仪表盘右栏新增错误类型分布卡片（`.error-types-card`），JS 脚本加载顺序新增 `dashboard_error_types.js`；`partials/` 下拆分出 tab、modal、scripts、settings 等子模板。
 
 ## 整体布局
 
@@ -202,7 +200,7 @@ dashboard: {
 
 #### 通过配置动态控制
 
-运行时的全部 UI 偏好由分组 `WebConfig` 控制，包含 `global` / `dashboard` / `errors` / `injection` 四个子节。`web_config.ts` 在启动时通过 `GET /api/web_config` 读取用户配置；保存时调用 `POST /api/web_config` 整体覆盖。可以通过后端 `config.json` 提供初始值：
+运行时的全部 UI 偏好由分组 `WebConfig` 控制，包含 `global` / `dashboard` / `errors` / `injection` 四个子节。`web_config.ts` 在启动时通过 `GET /api/pull_config` 读取用户配置；保存时调用 `POST /api/push_config` 整体覆盖。可以通过后端 `config.json` 提供初始值：
 
 ```json
 {

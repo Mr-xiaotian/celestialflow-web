@@ -1,6 +1,6 @@
 # TaskWebServer（core_server）
 
-> 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/01
 
 TaskWeb 模块提供了一个基于 FastAPI 的轻量级 Web 服务器，用于实时监控和管理任务图的运行。它充当了 `TaskReporter` (后端) 与 Web UI (前端) 之间的中转站。
 
@@ -71,7 +71,7 @@ TaskWeb 提供了一系列 RESTful API 供 `TaskReporter` 调用和前端使用�
 
 ### 拉取接口 (GET /api/pull_*)
 
-大部分拉取接口（`pull_status`、`pull_structure`、`pull_errors`、`pull_analysis`、`pull_error_type_counts`）支持 `known_rev` 机制：若服务端数据版本未变，则返回 `data: null` 以节省带宽。`pull_config`、`pull_injection`、`pull_server_state` 不使用 `known_rev` 机制，每次均返回完整数据（其中 `pull_server_state` 会调用 `sync_graph_context`，有副作用）。
+大部分拉取接口（`pull_status`、`pull_structure`、`pull_errors`、`pull_error_type_counts`）支持 `known_rev` 机制：若服务端数据版本未变，则返回 `data: null` 以节省带宽。`pull_analysis` 当前实现始终返回最新数据，不参与 `known_rev` 节流；`pull_config`、`pull_injection`、`pull_server_state` 不使用 `known_rev` 机制，每次均返回完整数据（其中 `pull_server_state` 会调用 `sync_graph_context`，有副作用）。
 
 | 端点 | 返回结构 (data 字段) | 说明 |
 |------|--------------------|------|
@@ -106,8 +106,10 @@ TaskWeb 提供了一系列 RESTful API 供 `TaskReporter` 调用和前端使用�
 
 ```python
 class StructureModel(BaseModel):
-    graph_id: str = ""  # 图实例标识，用于 Reporter 端 graph 上下文校验
-    structure: dict[str, Any]  # 结构快照，包含 nodes、edges、source_nodes
+    graph_id: str = ""                                              # 图实例标识，用于 Reporter 端 graph 上下文校验
+    nodes: dict[str, dict[str, Any]] = Field(default_factory=dict)  # 节点字典，键为节点名，值为节点属性
+    edges: dict[str, list[str]] = Field(default_factory=dict)      # 边字典，键为源节点名，值为目标节点名列表
+    source_nodes: list[str] = Field(default_factory=list)           # 源节点列表
 ```
 
 ### StatusModel

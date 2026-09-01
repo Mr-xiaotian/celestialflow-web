@@ -1,10 +1,8 @@
 # main.ts
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/09/01
 
 仪表盘主入口脚本，负责协调全局初始化、事件监听及核心数据轮询逻辑。
-
-> ⚠️ **已变更**: `refreshAll()` 现并行 5 个请求（statuses、structure、errors、analysis、errorTypeCounts），其中 `loadErrorTypeCounts()` 为新增的错误类型聚合拉取。对应新增了 `renderErrorTypeChart()` 渲染分支和 `populateErrorTypeNodeFilter()` 筛选器填充。
 
 ## 全局变量
 
