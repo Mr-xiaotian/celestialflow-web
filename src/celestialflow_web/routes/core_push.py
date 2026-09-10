@@ -96,16 +96,19 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
             )
 
     # ==== Reporter / Backend Pushes ====
-    @router.post("/api/push_structure")
-    async def push_structure(data: StructureModel) -> dict[str, bool]:
+    @router.post("/api/push_structure", response_model=None)
+    async def push_structure(data: StructureModel) -> dict[str, bool] | JSONResponse:
         """
         更新图结构数据并递增版本号。
 
         :param data: 图结构数据
-        :return: {"ok": True} 或 {"ok": False}（非当前 graph 时）
+        :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
         """
         if not server.is_current_graph(data.graph_id):
-            return {"ok": False}
+            return JSONResponse(
+                content={"ok": False, "error": "stale graph_id"},
+                status_code=409,
+            )
         server.update_structure_store(
             {
                 "nodes": data.nodes,
@@ -115,42 +118,51 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         )
         return {"ok": True}
 
-    @router.post("/api/push_analysis")
-    async def push_analysis(data: AnalysisModel) -> dict[str, bool]:
+    @router.post("/api/push_analysis", response_model=None)
+    async def push_analysis(data: AnalysisModel) -> dict[str, bool] | JSONResponse:
         """
         更新图分析信息并递增版本号。
 
         :param data: 图分析数据
-        :return: {"ok": True} 或 {"ok": False}（非当前 graph 时）
+        :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
         """
         if not server.is_current_graph(data.graph_id):
-            return {"ok": False}
+            return JSONResponse(
+                content={"ok": False, "error": "stale graph_id"},
+                status_code=409,
+            )
         server.update_analysis_store(data.analysis)
         return {"ok": True}
 
-    @router.post("/api/push_status")
-    async def push_status(data: StatusModel) -> dict[str, bool]:
+    @router.post("/api/push_status", response_model=None)
+    async def push_status(data: StatusModel) -> dict[str, bool] | JSONResponse:
         """
         更新各节点运行状态并递增版本号。
 
         :param data: 节点状态数据
-        :return: {"ok": True} 或 {"ok": False}（非当前 graph 时）
+        :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
         """
         if not server.is_current_graph(data.graph_id):
-            return {"ok": False}
+            return JSONResponse(
+                content={"ok": False, "error": "stale graph_id"},
+                status_code=409,
+            )
         server.update_status_store(float(data.timestamp), data.status)
         return {"ok": True}
 
-    @router.post("/api/push_errors")
-    async def push_errors(data: ErrorsModel) -> dict[str, bool]:
+    @router.post("/api/push_errors", response_model=None)
+    async def push_errors(data: ErrorsModel) -> dict[str, bool] | JSONResponse:
         """
         直接接收错误日志列表并存储。
 
         :param data: 错误内容数据
-        :return: {"ok": True} 或 {"ok": False}（非当前 graph 时）
+        :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
         """
         if not server.is_current_graph(data.graph_id):
-            return {"ok": False}
+            return JSONResponse(
+                content={"ok": False, "error": "stale graph_id"},
+                status_code=409,
+            )
         server.update_errors_store(
             data.errors,
         )

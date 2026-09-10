@@ -625,8 +625,8 @@ def test_stale_graph_pushes_are_ignored(client):
             "analysis": {"graphId": old_graph_id, "name": "old", "startTime": 1.0},
         },
     )
-    assert stale_analysis.status_code == 200
-    assert stale_analysis.json() == {"ok": False}
+    assert stale_analysis.status_code == 409
+    assert stale_analysis.json() == {"ok": False, "error": "stale graph_id"}
 
     stale_errors = client.post(
         "/api/push_errors",
@@ -645,8 +645,8 @@ def test_stale_graph_pushes_are_ignored(client):
             ],
         },
     )
-    assert stale_errors.status_code == 200
-    assert stale_errors.json() == {"ok": False}
+    assert stale_errors.status_code == 409
+    assert stale_errors.json() == {"ok": False, "error": "stale graph_id"}
 
     state = client.get(f"/api/pull_server_state?graph_id={new_graph_id}").json()
     assert state["is_current_graph"] is True
