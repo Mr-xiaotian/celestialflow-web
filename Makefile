@@ -1,4 +1,4 @@
-.PHONY: build watch check
+.PHONY: build watch check serve
 
 FRONTEND_DIR := src/celestialflow_web
 TSC := node $(FRONTEND_DIR)/node_modules/typescript/bin/tsc
@@ -12,3 +12,6 @@ watch:
 
 check:
 	$(TSC) -p $(TSCONFIG) --noEmit
+
+serve:
+	uv run celestialflow-web --port 5005
