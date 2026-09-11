@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "celestialflow-web"
-version = "0.1.2"
+version = "0.1.3"
 description = "CelestialFlow Web UI for task graph monitoring and control."
 readme = "README.md"
 license = "MIT"
