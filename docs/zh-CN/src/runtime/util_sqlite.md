@@ -183,7 +183,11 @@ flowchart TD
 ### 连接与写入
 
 ```python
-from celestialflow_web.runtime.util_sqlite import connect_db, append_records, clear_records
+from celestialflow_web.runtime.util_sqlite import (
+    connect_db,
+    append_records,
+    clear_records,
+)
 
 db_path = "data/errors.db"
 
@@ -234,7 +238,9 @@ total, total_pages, items = query_records(
 
 print(f"共 {total} 条匹配记录，{total_pages} 页")
 for item in items:
-    print(f"  event_id={item['event_id']}, stage={item['stage']}, error={item['error_type']}")
+    print(
+        f"  event_id={item['event_id']}, stage={item['stage']}, error={item['error_type']}"
+    )
 ```
 
 ### 错误类型统计

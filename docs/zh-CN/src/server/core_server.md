@@ -106,34 +106,38 @@ TaskWeb 提供了一系列 RESTful API 供 `TaskReporter` 调用和前端使用�
 
 ```python
 class StructureModel(BaseModel):
-    graph_id: str = ""                                              # 图实例标识，用于 Reporter 端 graph 上下文校验
-    nodes: dict[str, dict[str, Any]] = Field(default_factory=dict)  # 节点字典，键为节点名，值为节点属性
-    edges: dict[str, list[str]] = Field(default_factory=dict)      # 边字典，键为源节点名，值为目标节点名列表
-    source_nodes: list[str] = Field(default_factory=list)           # 源节点列表
+    graph_id: str = ""  # 图实例标识，用于 Reporter 端 graph 上下文校验
+    nodes: dict[str, dict[str, Any]] = Field(
+        default_factory=dict
+    )  # 节点字典，键为节点名，值为节点属性
+    edges: dict[str, list[str]] = Field(
+        default_factory=dict
+    )  # 边字典，键为源节点名，值为目标节点名列表
+    source_nodes: list[str] = Field(default_factory=list)  # 源节点列表
 ```
 
 ### StatusModel
 
 ```python
 class StatusModel(BaseModel):
-    graph_id: str = ""                    # 图实例标识
-    timestamp: float                      # 统一采样时间戳
-    status: dict[str, dict[str, Any]]     # 键为节点名，值为节点状态字典
+    graph_id: str = ""  # 图实例标识
+    timestamp: float  # 统一采样时间戳
+    status: dict[str, dict[str, Any]]  # 键为节点名，值为节点状态字典
 ```
 
 ### ErrorsModel
 
 ```python
 class ErrorsModel(BaseModel):
-    graph_id: str = ""              # 图实例标识
-    errors: list[dict[str, Any]]    # 错误记录列表，直接写入 SQLite 数据库
+    graph_id: str = ""  # 图实例标识
+    errors: list[dict[str, Any]]  # 错误记录列表，直接写入 SQLite 数据库
 ```
 
 ### AnalysisModel
 
 ```python
 class AnalysisModel(BaseModel):
-    graph_id: str = ""        # 图实例标识
+    graph_id: str = ""  # 图实例标识
     analysis: dict[str, Any]  # 分析结果字典
 ```
 
@@ -168,16 +172,19 @@ class GlobalConfigModel(BaseModel):
     refreshInterval: int
     language: str = "zh-CN"
 
+
 class DashboardConfigModel(BaseModel):
     left: list[str]
     middle: list[str]
     right: list[str]
+
 
 class DashboardPageConfigModel(BaseModel):
     historyLimit: int
     showStructureEdgeDelta: bool = False
     useTotalPendingInStatus: bool = False
     layout: DashboardConfigModel
+
 
 class ErrorsPageConfigModel(BaseModel):
     pageSize: int = 10
@@ -195,14 +202,18 @@ class ErrorsPageConfigModel(BaseModel):
         ]
     )
 
+
 class InjectionPageConfigModel(BaseModel):
     showInjectableOnly: bool = True
+
 
 class WebConfigModel(BaseModel):
     global_: GlobalConfigModel = Field(alias="global")
     dashboard: DashboardPageConfigModel
     errors: ErrorsPageConfigModel
-    injection: InjectionPageConfigModel = Field(default_factory=InjectionPageConfigModel)
+    injection: InjectionPageConfigModel = Field(
+        default_factory=InjectionPageConfigModel
+    )
 ```
 
 ## 配置管理

@@ -37,19 +37,19 @@ def normalize_errors_query(
 from celestialflow_web.runtime.util_cal import cal_interval
 
 # 5000ms -> 5.0s（标准 5 秒刷新）
-print(f"5000ms -> {cal_interval(5000)}s")    # 5.0
+print(f"5000ms -> {cal_interval(5000)}s")  # 5.0
 
 # 1000ms -> 1.0s（下限 1 秒）
-print(f"1000ms -> {cal_interval(1000)}s")    # 1.0
+print(f"1000ms -> {cal_interval(1000)}s")  # 1.0
 
 # 500ms -> 1.0s（低于下限，被限制到 1.0）
-print(f"500ms  -> {cal_interval(500)}s")     # 1.0
+print(f"500ms  -> {cal_interval(500)}s")  # 1.0
 
 # 120000ms -> 60.0s（超过上限，被限制到 60.0）
-print(f"120000ms -> {cal_interval(120000)}s") # 60.0
+print(f"120000ms -> {cal_interval(120000)}s")  # 60.0
 
 # 边界：正好等于上限
-print(f"60000ms -> {cal_interval(60000)}s")   # 60.0
+print(f"60000ms -> {cal_interval(60000)}s")  # 60.0
 
 # 典型的 Web UI 刷新间隔配置
 refresh_options_ms = [1000, 2000, 5000, 10000, 30000]
@@ -78,9 +78,9 @@ page, page_size, node, keyword, sort_order = normalize_errors_query(
     sort_order="invalid",
 )
 
-print(page)        # 1
-print(page_size)   # 200
-print(node)        # "StageA"
-print(keyword)     # "timeout"
+print(page)  # 1
+print(page_size)  # 200
+print(node)  # "StageA"
+print(keyword)  # "timeout"
 print(sort_order)  # "newest"
 ```

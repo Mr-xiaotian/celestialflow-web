@@ -56,6 +56,7 @@ router = create_router(server)
 
 # 挂载到 FastAPI 应用
 from fastapi import FastAPI
+
 app = FastAPI()
 app.include_router(router)
 ```

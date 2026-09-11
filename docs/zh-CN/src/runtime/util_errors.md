@@ -44,7 +44,10 @@ class ConfigurationError(CelestialFlowWebError):
 ## 使用示例
 
 ```python
-from celestialflow_web.runtime.util_errors import CelestialFlowWebError, ConfigurationError
+from celestialflow_web.runtime.util_errors import (
+    CelestialFlowWebError,
+    ConfigurationError,
+)
 
 # 捕获所有 CelestialFlow 业务异常
 try:

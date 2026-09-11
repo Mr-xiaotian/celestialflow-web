@@ -155,8 +155,12 @@ Web UI 全局配置模型（嵌套分组结构）。
 
 ```python
 from celestialflow_web.runtime.util_models import (
-    WebConfigModel, GlobalConfigModel, DashboardPageConfigModel,
-    DashboardConfigModel, ErrorsPageConfigModel, InjectionPageConfigModel,
+    WebConfigModel,
+    GlobalConfigModel,
+    DashboardPageConfigModel,
+    DashboardConfigModel,
+    ErrorsPageConfigModel,
+    InjectionPageConfigModel,
     TaskInjectionModel,
 )
 

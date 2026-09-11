@@ -105,9 +105,12 @@ try:
 
     # 使用 Pydantic 模型验证（假设在 core_server.py 中）
     from celestialflow_web.runtime.util_models import WebConfigModel
+
     validated = WebConfigModel.model_validate(raw_config)
 
-    print(f"验证通过: 主题={validated.global_.theme}, 刷新={validated.global_.refreshInterval}ms")
+    print(
+        f"验证通过: 主题={validated.global_.theme}, 刷新={validated.global_.refreshInterval}ms"
+    )
 
     # 修改后保存
     validated.global_.theme = "dark"

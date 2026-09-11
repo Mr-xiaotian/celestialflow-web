@@ -75,9 +75,10 @@ celestialflow-web --port 5000
 import requests
 
 # 向指定节点覆盖写入待注入任务（格式：{节点名: [任务列表]}）
-requests.post("http://localhost:5000/api/push_injection_tasks", json={
-    "Stage_A": [{"id": 1, "data": "payload"}]
-})
+requests.post(
+    "http://localhost:5000/api/push_injection_tasks",
+    json={"Stage_A": [{"id": 1, "data": "payload"}]},
+)
 ```
 
 ## 使用示例
@@ -89,9 +90,9 @@ from celestialflow_web import TaskWebServer
 
 # 创建服务器实例
 server = TaskWebServer(
-    host="127.0.0.1",   # 监听地址
-    port=5000,            # 监听端口
-    log_level="info",    # 日志级别
+    host="127.0.0.1",  # 监听地址
+    port=5000,  # 监听端口
+    log_level="info",  # 日志级别
 )
 
 # 启动服务器（阻塞调用，会一直运行）
