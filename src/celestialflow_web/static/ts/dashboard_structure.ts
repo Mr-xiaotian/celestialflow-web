@@ -182,11 +182,18 @@ linkStyle default stroke:#999,stroke-width:1.5px;
       const toId = getNodeId(toName);
 
       let edgeLabel = ""; // Mermaid 边标签，默认空字符串
-      if (webConfig.dashboard.showStructureEdgeDelta) {
-        const lastInfo = lastNodeStatuses[fromName] || ({} as NodeStatus); // 上一轮状态，用于计算增量
-        const addNum = (statusInfo?.tasks_succeeded || 0) - (lastInfo?.tasks_succeeded || 0); // 本轮新增成功任务数
+      const toCount = statusInfo?.downstream_counts?.[toName] || 0; // 该上游发往此下游的累计任务数
+      if (webConfig.dashboard.structureEdgeLabel === "delta") {
+        // 增量模式：该边相对上一轮新增的传输数量（per-edge 增量）
+        const lastInfo = lastNodeStatuses[fromName] || ({} as NodeStatus);
+        const lastCount = lastInfo.downstream_counts?.[toName] || 0;
+        const addNum = toCount - lastCount;
         edgeLabel = addNum > 0 ? `|+${addNum}|` : "";
+      } else if (webConfig.dashboard.structureEdgeLabel === "cumulative") {
+        // 累计模式：每个上游到该下游的传输任务总数
+        edgeLabel = toCount > 0 ? `|${toCount}|` : "";
       }
+      // "none" 模式不显示任何边标签
       mermaidEdges.add(`  ${fromId} -->${edgeLabel} ${toId}`);
     }
   }

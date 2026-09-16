@@ -90,15 +90,30 @@
             </div>
             <div class="settings-item" data-settings-tab="dashboard">
                 <label
-                    for="structure-edge-delta"
-                    data-i18n="settings.structureEdgeDelta"
-                    >结构图显示增量</label
+                    for="structure-edge-label"
+                    data-i18n="settings.structureEdgeLabel"
+                    >结构图边标签</label
                 >
-                <input
-                    id="structure-edge-delta"
-                    class="settings-toggle"
-                    type="checkbox"
-                />
+                <select id="structure-edge-label">
+                    <option
+                        value="none"
+                        data-i18n="settings.structureEdgeLabelNone"
+                    >
+                        无
+                    </option>
+                    <option
+                        value="delta"
+                        data-i18n="settings.structureEdgeLabelDelta"
+                    >
+                        增量
+                    </option>
+                    <option
+                        value="cumulative"
+                        data-i18n="settings.structureEdgeLabelCumulative"
+                    >
+                        累计
+                    </option>
+                </select>
             </div>
             <div class="settings-item" data-settings-tab="dashboard">
                 <label

@@ -8,9 +8,11 @@ type WebGlobalConfig = {
   language: Lang; // 界面语言
 };
 
+type StructureEdgeLabel = "none" | "delta" | "cumulative"; // 结构图边标签显示模式：无 / 增量 / 累计
+
 type WebDashboardConfig = {
   historyLimit: number; // 节点处理历史记录保留条数
-  showStructureEdgeDelta: boolean; // 是否在结构图边上显示成功任务增量
+  structureEdgeLabel: StructureEdgeLabel; // 结构图边标签显示模式
   useTotalPendingInStatus: boolean; // 节点状态卡是否使用 total_tasks_pending
   layout: DashboardLayout; // 仪表盘左右中三栏的卡片布局
 };
@@ -42,6 +44,7 @@ type LegacyWebConfig = {
   errorPageSize?: number;
   errorSortOrder?: "newest" | "oldest";
   showStructureEdgeDelta?: boolean;
+  structureEdgeLabel?: StructureEdgeLabel;
   useTotalPendingInStatus?: boolean;
   dashboard?: Partial<DashboardLayout>;
 };
@@ -56,7 +59,7 @@ const DEFAULT_WEB_CONFIG: WebConfig = {
   },
   dashboard: {
     historyLimit: 20,
-    showStructureEdgeDelta: false,
+    structureEdgeLabel: "none",
     useTotalPendingInStatus: false,
     layout: {
       left: ["mermaid", "analysis"],
@@ -137,6 +140,17 @@ function normalizeErrorColumns(
 }
 
 /**
+ * 归一化结构图边标签显示模式，非法值回退到默认无标签。
+ * @param {unknown} value - 原始配置值
+ * @returns {StructureEdgeLabel} 合法的三种模式之一
+ */
+function normalizeStructureEdgeLabel(value: unknown): StructureEdgeLabel {
+  return value === "delta" || value === "cumulative" || value === "none"
+    ? value
+    : "none";
+}
+
+/**
  * 基于默认配置补齐后端返回值，确保页面在缺字段时也能稳定启动。
  * @param {Partial<WebConfig> | LegacyWebConfig | null} [rawConfig] - 后端返回的原始配置；为空时仅使用默认值。
  * @returns {WebConfig} 补齐缺省字段后的可用配置对象。
@@ -168,6 +182,9 @@ function normalizeWebConfig(
       dashboard: {
         ...DEFAULT_WEB_CONFIG.dashboard,
         ...(rawConfig.dashboard ?? {}),
+        structureEdgeLabel: normalizeStructureEdgeLabel(
+          rawConfig.dashboard?.structureEdgeLabel,
+        ),
         layout: normalizeDashboardLayout(rawConfig.dashboard?.layout),
       },
       errors: {
@@ -198,9 +215,13 @@ function normalizeWebConfig(
       ...DEFAULT_WEB_CONFIG.dashboard,
       historyLimit:
         legacyConfig.historyLimit ?? DEFAULT_WEB_CONFIG.dashboard.historyLimit,
-      showStructureEdgeDelta:
-        legacyConfig.showStructureEdgeDelta ??
-        DEFAULT_WEB_CONFIG.dashboard.showStructureEdgeDelta,
+      structureEdgeLabel:
+        legacyConfig.structureEdgeLabel ??
+        (legacyConfig.showStructureEdgeDelta === true
+          ? "delta"
+          : legacyConfig.showStructureEdgeDelta === false
+            ? "none"
+            : DEFAULT_WEB_CONFIG.dashboard.structureEdgeLabel),
       useTotalPendingInStatus:
         legacyConfig.useTotalPendingInStatus ??
         DEFAULT_WEB_CONFIG.dashboard.useTotalPendingInStatus,
@@ -521,10 +542,11 @@ function applyConfig(): void {
   }
   renderErrorsTableHeader();
 
-  // 应用结构图边增量显示开关
-  webConfig.dashboard.showStructureEdgeDelta =
-    webConfig.dashboard.showStructureEdgeDelta !== false;
-  structureEdgeDeltaToggle.checked = webConfig.dashboard.showStructureEdgeDelta;
+  // 应用结构图边标签显示模式
+  webConfig.dashboard.structureEdgeLabel = normalizeStructureEdgeLabel(
+    webConfig.dashboard.structureEdgeLabel,
+  );
+  structureEdgeLabelSelect.value = webConfig.dashboard.structureEdgeLabel;
 
   // 应用节点状态等待模式开关
   webConfig.dashboard.useTotalPendingInStatus =

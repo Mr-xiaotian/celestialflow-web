@@ -7,7 +7,7 @@
     },
     "dashboard": {
         "historyLimit": 20,
-        "showStructureEdgeDelta": false,
+        "structureEdgeLabel": "none",
         "useTotalPendingInStatus": false,
         "layout": {
             "left": [

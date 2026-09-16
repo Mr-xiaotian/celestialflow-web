@@ -11,6 +11,8 @@ type NodeStatus = {
   tasks_succeeded: number; // 成功处理的任务数
   tasks_failed: number; // 处理失败的任务数
   tasks_duplicated: number; // 被去重过滤的任务数
+  upstream_counts: Record<string, number>; // 各上游节点传输给本节点的任务数量
+  downstream_counts: Record<string, number>; // 本节点传输给各下游节点的任务数量
   execution_mode: string; // 运行模式（serial/thread/async）
   max_workers: number; // 最大并发数
   class_name: string; // 节点类名（TaskStage/TaskSplitter/TaskRouter）

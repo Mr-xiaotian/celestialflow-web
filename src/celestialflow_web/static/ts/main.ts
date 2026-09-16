@@ -19,7 +19,7 @@ const languageSelect = document.getElementById("language-select") as HTMLSelectE
 const autoRefreshToggle = document.getElementById("auto-refresh-toggle") as HTMLInputElement; // 自动刷新开关
 const errorPageSizeSelect = document.getElementById("error-page-size") as HTMLSelectElement; // 错误每页条数下拉框
 const errorJumpToInjectionToggle = document.getElementById("error-jump-to-injection-toggle") as HTMLInputElement; // 错误页任务注入后是否跳转
-const structureEdgeDeltaToggle = document.getElementById("structure-edge-delta") as HTMLInputElement; // 结构图边增量显示开关
+const structureEdgeLabelSelect = document.getElementById("structure-edge-label") as HTMLSelectElement; // 结构图边标签显示模式下拉框
 const statusTotalPendingToggle = document.getElementById("status-total-pending-toggle") as HTMLInputElement; // 节点状态卡等待值模式开关
 const injectableOnlyToggle = document.getElementById("injectable-only-toggle") as HTMLInputElement; // 注入页仅显示可注入节点开关
 const settingsCurrentGroup = document.getElementById("settings-current-group") as HTMLElement; // 当前页设置分组
@@ -276,9 +276,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         showSettingsSaveStatus(await saveWebConfig() ? "settings.saveSuccess" : "settings.saveFailed");
     });
 
-    // 切换结构图边增量显示：立即重绘结构图并保存配置
-    structureEdgeDeltaToggle.addEventListener("change", async () => {
-        config.dashboard.showStructureEdgeDelta = structureEdgeDeltaToggle.checked;
+    // 切换结构图边标签显示模式：立即重绘结构图并保存配置
+    structureEdgeLabelSelect.addEventListener("change", async () => {
+        config.dashboard.structureEdgeLabel = structureEdgeLabelSelect.value as StructureEdgeLabel;
         renderMermaidStructure(nodeStatuses);
         showSettingsSaveStatus(await saveWebConfig() ? "settings.saveSuccess" : "settings.saveFailed");
     });
