@@ -326,11 +326,11 @@ async function refreshAll() {
     ]);
     // 图级派生指标由前端本地估算：必须在结构与分析数据就绪后、渲染之前统一收口。
     if (statusesChanged || structureChanged || analysisChanged) {
-        applyGlobalEstimates();
+        refreshNodeEstimates();
     }
-    // 历史曲线依赖上一步算出的 total_tasks_pending，因此延后到估算完成后再记录。
+    // 历史曲线依赖上一步算出的 nodeEstimates，因此延后到估算完成后再记录。
     if (statusesChanged) {
-        appendStatusSnapshotToHistory(lastStatusTimestamp, nodeStatuses, lastNodeStatuses);
+        appendStatusSnapshotToHistory(lastStatusTimestamp, nodeStatuses, nodeEstimates, lastNodeStatuses);
     }
     // 结构图依赖结构数据，也会用节点状态给节点着色。
     if (statusesChanged || structureChanged) {

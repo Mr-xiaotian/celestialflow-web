@@ -15,7 +15,7 @@ const totalRemain = document.getElementById("total-remain");
 /**
  * 渲染汇总数据面板
  * 基于已有节点状态聚合展示总成功数、等待数、失败数、重复数、活动节点数；
- * 图级剩余时间由前端基于各节点的 `total_remaining_time` 取最大值得到。
+ * 图级剩余时间由前端基于各节点的派生估算取最大值得到。
  * @returns {void}
  */
 function renderSummary() {
@@ -25,7 +25,7 @@ function renderSummary() {
     const total_failed = statusList.reduce((sum, status) => sum + (status.tasks_failed || 0), 0); // 总失败任务数
     const total_duplicated = statusList.reduce((sum, status) => sum + (status.tasks_duplicated || 0), 0); // 总重复任务数
     const total_nodes = statusList.reduce((sum, status) => sum + (status.status === 1 ? 1 : 0), 0); // 当前运行中的节点数
-    const total_remain = Math.max(...statusList.map(status => status.total_remaining_time || 0), 0); // 图级剩余时间取所有链路估算中的最大值
+    const total_remain = Math.max(...Object.values(nodeEstimates).map((estimate) => estimate.total_remaining_time), 0); // 图级剩余时间取所有链路估算中的最大值
     totalSucceeded.innerHTML = formatLargeNumber(total_succeeded);
     totalPending.innerHTML = formatLargeNumber(total_pending);
     totalFailed.innerHTML = formatLargeNumber(total_failed);

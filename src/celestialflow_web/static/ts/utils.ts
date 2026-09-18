@@ -170,17 +170,19 @@ function formatTimestamp(timestamp: number): string {
 }
 
 /**
- * 计算预计剩余时间（秒）
- * @param {number} processed - 已处理任务数
- * @param {number} pending - 待处理任务数
+ * 格式化平均任务耗时
  * @param {number} elapsed - 已消耗时间（秒）
- * @returns {number} 预计剩余时间（秒）
+ * @param {number} processed - 已处理任务数
+ * @returns {string} 形如 `"1.44s/it"` 或 `"8.00it/s"` 的文本；缺少样本时返回 `"N/A"`
  */
-function calcRemainTime(processed: number, pending: number, elapsed: number): number {
-  if (processed && pending) {
-      return pending / processed * elapsed // 按当前吞吐速度线性估算剩余时长
+function formatAvgTime(elapsed: number, processed: number): string {
+  if (!elapsed || !processed) return "N/A";
+
+  const avgTime = elapsed / processed; // 秒/任务
+  if (avgTime >= 1.0) {
+    return `${avgTime.toFixed(2)}s/it`;
   }
-  return 0 // 没有足够样本时返回 0，避免误导性估算
+  return `${(processed / elapsed).toFixed(2)}it/s`; // 任务/秒
 }
 
 /**

@@ -3,7 +3,7 @@
  * 负责各节点运行指标（成功、失败、等待、重复、速率等）的实时展示
  */
 
-/** 节点运行时状态快照定义 */
+/** 节点运行时状态快照定义（与后端 payload 的字段形状一致） */
 type NodeStatus = {
   status: number; // 状态码：0-未运行, 1-运行中, 2-已停止
   tasks_processed: number; // 已处理任务总数
@@ -11,17 +11,22 @@ type NodeStatus = {
   tasks_succeeded: number; // 成功处理的任务数
   tasks_failed: number; // 处理失败的任务数
   tasks_duplicated: number; // 被去重过滤的任务数
-  upstream_counts: Record<string, number>; // 各上游节点传输给本节点的任务数量
   downstream_counts: Record<string, number>; // 本节点传输给各下游节点的任务数量
   execution_mode: string; // 运行模式（serial/thread/async）
   max_workers: number; // 最大并发数
   class_name: string; // 节点类名（TaskStage/TaskSplitter/TaskRouter）
   start_time: number; // 启动 Unix 时间戳
   elapsed_time: number; // 已运行秒数
-  remaining_time: number; // 预计剩余秒数
-  total_tasks_pending: number; // 总待处理任务数
-  total_remaining_time: number; // 预计总剩余秒数(考虑各条链路状态)
-  task_avg_time: string; // 平均每个任务耗时文本
+};
+
+/**
+ * 由前端从状态快照与静态拓扑推导出的图级派生值
+ *
+ * 不与 `NodeStatus` 混放：这两项需要全图信息才能算出，属于本地派生而非上报内容。
+ */
+type NodeEstimate = {
+  total_tasks_pending: number; // 总待处理任务数（含下游链路）
+  total_remaining_time: number; // 预计总剩余秒数（考虑各条链路状态）
 };
 
 type ElapsedSegment = {
@@ -32,6 +37,8 @@ type ElapsedSegment = {
 // 全局状态
 let nodeStatuses: Record<string, NodeStatus> = {}; // 当前各节点运行状态
 let lastNodeStatuses: Record<string, NodeStatus> = {}; // 上一轮状态快照，用于计算增量
+let nodeEstimates: Record<string, NodeEstimate> = {}; // 本轮图级派生值，与 nodeStatuses 同步轮转
+let lastNodeEstimates: Record<string, NodeEstimate> = {}; // 上一轮派生值，用于计算增量
 let statusRev = -1; // 上次拉取的数据版本号，-1 表示首次拉取全量
 let statusesRequestSeq = 0; // 请求序列号，防止旧状态响应覆盖新结果
 let lastStatusTimestamp = 0; // 最近一次状态快照的统一时间戳，供历史曲线记录使用
@@ -40,35 +47,38 @@ let lastStatusTimestamp = 0; // 最近一次状态快照的统一时间戳，供
 const dashboardGrid = document.getElementById("dashboard-grid") as HTMLElement;
 
 /**
- * 获取节点状态卡当前采用的等待值字段。
- * @returns {"tasks_pending" | "total_tasks_pending"} 当前等待统计字段。
- */
-function getStatusPendingField(): "tasks_pending" | "total_tasks_pending" {
-  return webConfig.dashboard.useTotalPendingInStatus
-    ? "total_tasks_pending"
-    : "tasks_pending";
-}
-
-/**
  * 根据当前配置获取节点状态卡应展示的等待任务数。
  * @param {NodeStatus} status - 节点状态快照
+ * @param {NodeEstimate} [estimate] - 该节点的图级派生值；结构与分析就绪前可能缺失
  * @returns {number} 当前节点状态卡使用的等待值
  */
-function getDisplayPending(status: NodeStatus): number {
-  const pendingField = getStatusPendingField();
-  return Number(status[pendingField] || 0);
+function getDisplayPending(status: NodeStatus, estimate?: NodeEstimate): number {
+  if (webConfig.dashboard.useTotalPendingInStatus) {
+    return Number(estimate?.total_tasks_pending || 0);
+  }
+  return Number(status.tasks_pending || 0);
 }
 
 /**
  * 根据当前配置获取节点状态卡应展示的剩余时间。
+ *
+ * 总等待模式使用图级估算的 `total_remaining_time`；否则基于本节点自身的计数就地推算，
+ * 不依赖任何额外状态。
  * @param {NodeStatus} status - 节点状态快照
- * @returns {number} 当前节点状态卡使用的剩余时间
+ * @param {NodeEstimate} [estimate] - 该节点的图级派生值；结构与分析就绪前可能缺失
+ * @returns {number} 当前节点状态卡使用的剩余时间（秒）
  */
-function getDisplayRemainingTime(status: NodeStatus): number {
-  return Number(
-    webConfig.dashboard.useTotalPendingInStatus
-      ? status.total_remaining_time
-      : status.remaining_time,
+function getDisplayRemainingTime(
+  status: NodeStatus,
+  estimate?: NodeEstimate,
+): number {
+  if (webConfig.dashboard.useTotalPendingInStatus) {
+    return Number(estimate?.total_remaining_time || 0);
+  }
+  return calcRemaining(
+    Number(status.tasks_processed || 0),
+    Number(status.tasks_pending || 0),
+    Number(status.elapsed_time || 0),
   );
 }
 
@@ -239,14 +249,14 @@ async function loadStatuses(): Promise<boolean> {
 }
 
 /**
- * 用前端本地估算覆盖后端推送的图级派生字段
+ * 基于同一快照内的原始计数与静态拓扑，刷新各节点的图级派生值
  *
- * 计算 `total_tasks_pending` 与 `total_remaining_time` 需要同一快照内的原始计数、
- * 每边输出量以及静态拓扑（结构）与是否为 DAG（分析）。结构或分析尚未就绪时直接返回，
- * 保留后端推送的原值，避免在拓扑缺失时静默算出退化的结果。
+ * `total_tasks_pending` 与 `total_remaining_time` 需要每个节点的计数与每边输出量，
+ * 外加结构提供的拓扑与拓扑分析提供的 DAG 判定。结构或分析尚未就绪时直接返回，
+ * 避免在拓扑缺失时静默算出退化的结果。
  * @returns {void}
  */
-function applyGlobalEstimates(): void {
+function refreshNodeEstimates(): void {
   if (!structureData.nodes.length || !analysisData) {
     return; // 结构或分析数据尚未就绪
   }
@@ -270,15 +280,21 @@ function applyGlobalEstimates(): void {
       )
     : { ...pendingMap };
 
+  const nextEstimates: Record<string, NodeEstimate> = {};
   for (const [name, status] of Object.entries(nodeStatuses)) {
     const totalPending = totalPendingMap[name] ?? 0;
-    status.total_tasks_pending = totalPending;
-    status.total_remaining_time = calcRemaining(
-      Number(status.tasks_processed || 0),
-      totalPending,
-      Number(status.elapsed_time || 0),
-    );
+    nextEstimates[name] = {
+      total_tasks_pending: totalPending,
+      total_remaining_time: calcRemaining(
+        Number(status.tasks_processed || 0),
+        totalPending,
+        Number(status.elapsed_time || 0),
+      ),
+    };
   }
+
+  lastNodeEstimates = nodeEstimates;
+  nodeEstimates = nextEstimates;
 }
 
 /**
@@ -296,9 +312,11 @@ function renderDashboard(): void {
   for (const [node, data] of Object.entries(nodeStatuses)) {
     // 计算增量变化
     const last = lastNodeStatuses[node] || ({} as NodeStatus); // 上一轮同节点状态
-    const displayPending = getDisplayPending(data); // 当前等待值展示字段
-    const lastDisplayPending = getDisplayPending(last); // 上一轮等待值展示字段
-    const displayRemainingTime = getDisplayRemainingTime(data); // 当前剩余时间展示字段
+    const estimate = nodeEstimates[node]; // 当前图级派生值
+    const lastEstimate = lastNodeEstimates[node]; // 上一轮图级派生值
+    const displayPending = getDisplayPending(data, estimate); // 当前等待值展示字段
+    const lastDisplayPending = getDisplayPending(last, lastEstimate); // 上一轮等待值展示字段
+    const displayRemainingTime = getDisplayRemainingTime(data, estimate); // 当前剩余时间展示字段
     const addSucceeded = data.tasks_succeeded - (last.tasks_succeeded || 0); // 成功数增量
     const addPending = displayPending - lastDisplayPending; // 等待数增量
     const addFailed = data.tasks_failed - (last.tasks_failed || 0); // 失败数增量
@@ -373,7 +391,10 @@ function renderDashboard(): void {
                 )}</span>
                 &lt;
                 <span class="remaining">${formatDuration(displayRemainingTime)}</span>,
-                <span class="task-avg-time">${data.task_avg_time}</span>,
+                <span class="task-avg-time">${formatAvgTime(
+                  data.elapsed_time,
+                  data.tasks_processed,
+                )}</span>,
                 <span class="progress-ratio">${progressRatio}%</span>
               </span>
             </div>

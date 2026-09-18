@@ -171,10 +171,11 @@ function trimNodeHistories() {
  * 根据最新状态快照在前端追加多指标历史点
  * @param {number} timestamp - 本轮状态快照的统一 Unix 时间戳（秒）。
  * @param {Record<string, NodeStatus>} statuses - 最新节点状态映射。
+ * @param {Record<string, NodeEstimate>} estimates - 与 statuses 同轮的图级派生值映射。
  * @param {Record<string, NodeStatus>} [previousStatuses={}] - 上一轮节点状态映射，用于识别节点重启。
  * @returns {boolean} 历史数据是否发生了变化。
  */
-function appendStatusSnapshotToHistory(timestamp, statuses, previousStatuses = {}) {
+function appendStatusSnapshotToHistory(timestamp, statuses, estimates, previousStatuses = {}) {
     if (!Number.isFinite(timestamp) || timestamp <= 0) {
         return false;
     }
@@ -195,7 +196,7 @@ function appendStatusSnapshotToHistory(timestamp, statuses, previousStatuses = {
             tasks_failed: status.tasks_failed || 0,
             tasks_duplicated: status.tasks_duplicated || 0,
             tasks_pending: status.tasks_pending || 0,
-            total_tasks_pending: status.total_tasks_pending || 0,
+            total_tasks_pending: estimates[node]?.total_tasks_pending || 0,
         };
         if (!history.length) {
             // 首个采样点直接写入。
