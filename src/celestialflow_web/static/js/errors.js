@@ -3,15 +3,6 @@
  * 错误日志分页与过滤模块
  * 处理错误记录的异步拉取、前端分页逻辑以及按节点/关键词搜索的过滤展示
  */
-const DEFAULT_VISIBLE_ERROR_COLUMNS = [
-    "index",
-    "event_id",
-    "message",
-    "stage",
-    "task",
-    "time",
-    "retry",
-]; // 错误日志表格默认显示字段顺序
 const ERROR_COLUMN_META = {
     index: { labelKey: "errors.colIndex" },
     event_id: { labelKey: "errors.colId", cellClassName: "error-id" },
@@ -53,23 +44,11 @@ const errorColumnsEditorCloseBtn = document.getElementById("errors-columns-edito
 const errorColumnsSaveBtn = document.getElementById("errors-columns-save-btn");
 const errorColumnsResetBtn = document.getElementById("errors-columns-reset-btn");
 /**
- * 返回经过去重和过滤后的错误字段顺序。
- * @param {ErrorColumnKey[] | null | undefined} rawColumns - 原始字段数组。
- * @returns {ErrorColumnKey[]} 规范化后的字段数组。
- */
-function normalizeConfiguredErrorColumns(rawColumns) {
-    if (!Array.isArray(rawColumns)) {
-        return [...DEFAULT_VISIBLE_ERROR_COLUMNS];
-    }
-    const validColumns = new Set(DEFAULT_VISIBLE_ERROR_COLUMNS);
-    return rawColumns.filter((column, index) => validColumns.has(column) && rawColumns.indexOf(column) === index);
-}
-/**
  * 读取当前配置中的错误字段顺序；缺省时返回默认值。
  * @returns {ErrorColumnKey[]} 当前生效的错误字段顺序。
  */
 function getActiveErrorColumns() {
-    return normalizeConfiguredErrorColumns(webConfig?.errors.columns);
+    return normalizeErrorColumns(webConfig.errors.columns);
 }
 /**
  * 将任意任务对象稳定格式化为错误表格文本。
@@ -117,7 +96,7 @@ function getEditorColumns(zone) {
  * @param {ErrorColumnKey[]} visibleColumns - 当前显示字段顺序。
  * @returns {void}
  */
-function renderErrorColumnsEditor(visibleColumns = getActiveErrorColumns()) {
+function renderErrorColumnsEditor(visibleColumns) {
     const visibleZone = document.getElementById("errors-columns-dropzone-visible");
     const hiddenZone = document.getElementById("errors-columns-dropzone-hidden");
     const visibleSet = new Set(visibleColumns);
@@ -213,7 +192,7 @@ async function saveErrorColumns() {
  * @returns {void}
  */
 function resetErrorColumns() {
-    webConfig.errors.columns = [...DEFAULT_VISIBLE_ERROR_COLUMNS];
+    webConfig.errors.columns = [...DEFAULT_WEB_CONFIG.errors.columns];
     renderErrorColumnsEditor(webConfig.errors.columns);
 }
 /**
@@ -255,11 +234,10 @@ function createErrorTextCell(columnId, text, title) {
 /**
  * 创建重试操作单元格。
  * @param {ErrorData} errorData - 当前错误记录。
- * @param {string} taskText - 当前任务的序列化文本。
  * @returns {HTMLTableCellElement} 重试单元格节点。
  */
-function createRetryCell(errorData, taskText) {
-    const canRetry = errorData.task_json !== undefined && !taskText.startsWith("<");
+function createRetryCell(errorData) {
+    const canRetry = errorData.task_json !== undefined;
     const retryLabel = canRetry
         ? t("errors.retryInject")
         : t("errors.retryUnavailable");
@@ -311,7 +289,7 @@ function createErrorCell(columnId, errorData, index) {
         case "time":
             return createErrorTextCell("time", formatTimestamp(errorData.ts));
         case "retry":
-            return createRetryCell(errorData, taskText);
+            return createRetryCell(errorData);
     }
 }
 /**
@@ -357,10 +335,10 @@ async function loadErrors(forceReload = false) {
         totalPages = Number(data.total_pages || 1);
         errorSortOrder = data.sort_order === "oldest" ? "oldest" : "newest";
         lastQueryKey = queryKey;
-        if (data.data === null || data.data === undefined) {
+        if (data.data === null) {
             return false;
         }
-        errors = Array.isArray(data.data) ? data.data : []; // 仅接受数组类型结果
+        errors = data.data;
         const changed = errorsRev !== Number(data.rev); // 对比版本号判断是否有新内容
         errorsRev = Number(data.rev);
         return changed || forceReload;

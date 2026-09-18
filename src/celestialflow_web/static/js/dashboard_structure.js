@@ -46,7 +46,7 @@ function getNodeId(nodeName) {
  * 根据节点类名推导 Mermaid 形状类型
  * 类名来自运行时状态快照（snapshot 的 class_name）；结构数据不再携带执行层信息。
  * @param {string} [className] - 节点类名（如 TaskSplitter / TaskRouter），节点未运行时为空
- * @returns {string} Mermaid 形状名称
+ * @returns {NodeShape} Mermaid 形状名称
  */
 function getNodeShape(className) {
     switch (className) {
@@ -61,7 +61,7 @@ function getNodeShape(className) {
 /**
  * 根据节点形状类型生成 Mermaid 语法的标签
  * @param {string} label - 节点显示的文本
- * @param {string} shape - 形状类型，取自 `getNodeShape`，可选值包括 `box`、`rhombus`、`subgraph`
+ * @param {NodeShape} shape - 形状类型
  * @returns {string} 包含形状定义的 Mermaid 节点标签
  */
 function getShapeWrappedLabel(label, shape) {
@@ -70,7 +70,7 @@ function getShapeWrappedLabel(label, shape) {
             return `{{${label}}}`;
         case "subgraph": // Subroutine / Module block
             return `[[${label}]]`;
-        default: // Default rectangular box
+        case "box": // Default rectangular box
             return `[${label}]`;
     }
 }
@@ -81,7 +81,7 @@ function getShapeWrappedLabel(label, shape) {
  * @returns {void}
  */
 function renderMermaidStructure(statuses = {}) {
-    const { nodes = [], edges = {}, source_nodes = [] } = structureData || {}; // 当前结构图主数据
+    const { nodes, edges, source_nodes } = structureData; // 当前结构图主数据
     const nodeNames = nodes; // 全量节点名，供空状态判断和遍历使用
     if (!nodeNames.length) {
         const old = document.getElementById("mermaid-container");
@@ -139,7 +139,7 @@ linkStyle default stroke:#999,stroke-width:1.5px;
             continue;
         const fromId = getNodeId(fromName);
         const statusInfo = statuses[fromName];
-        for (const toName of toNames || []) {
+        for (const toName of toNames) {
             if (!nodes.includes(toName))
                 continue;
             const toId = getNodeId(toName);

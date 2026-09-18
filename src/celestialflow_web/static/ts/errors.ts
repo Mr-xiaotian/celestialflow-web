@@ -20,16 +20,6 @@ type ErrorColumnMeta = {
   cellClassName?: string; // 单元格额外样式类
 };
 
-const DEFAULT_VISIBLE_ERROR_COLUMNS: ErrorColumnKey[] = [
-  "index",
-  "event_id",
-  "message",
-  "stage",
-  "task",
-  "time",
-  "retry",
-]; // 错误日志表格默认显示字段顺序
-
 const ERROR_COLUMN_META: Record<ErrorColumnKey, ErrorColumnMeta> = {
   index: { labelKey: "errors.colIndex" },
   event_id: { labelKey: "errors.colId", cellClassName: "error-id" },
@@ -92,29 +82,11 @@ const errorColumnsResetBtn = document.getElementById(
 ) as HTMLButtonElement;
 
 /**
- * 返回经过去重和过滤后的错误字段顺序。
- * @param {ErrorColumnKey[] | null | undefined} rawColumns - 原始字段数组。
- * @returns {ErrorColumnKey[]} 规范化后的字段数组。
- */
-function normalizeConfiguredErrorColumns(
-  rawColumns?: ErrorColumnKey[] | null,
-): ErrorColumnKey[] {
-  if (!Array.isArray(rawColumns)) {
-    return [...DEFAULT_VISIBLE_ERROR_COLUMNS];
-  }
-  const validColumns = new Set(DEFAULT_VISIBLE_ERROR_COLUMNS);
-  return rawColumns.filter(
-    (column, index) =>
-      validColumns.has(column) && rawColumns.indexOf(column) === index,
-  );
-}
-
-/**
  * 读取当前配置中的错误字段顺序；缺省时返回默认值。
  * @returns {ErrorColumnKey[]} 当前生效的错误字段顺序。
  */
 function getActiveErrorColumns(): ErrorColumnKey[] {
-  return normalizeConfiguredErrorColumns(webConfig?.errors.columns);
+  return normalizeErrorColumns(webConfig.errors.columns);
 }
 
 /**
@@ -171,7 +143,7 @@ function getEditorColumns(zone: "visible" | "hidden"): ErrorColumnKey[] {
  * @returns {void}
  */
 function renderErrorColumnsEditor(
-  visibleColumns: ErrorColumnKey[] = getActiveErrorColumns(),
+  visibleColumns: ErrorColumnKey[],
 ): void {
   const visibleZone = document.getElementById(
     "errors-columns-dropzone-visible",
@@ -280,7 +252,7 @@ async function saveErrorColumns(): Promise<void> {
  * @returns {void}
  */
 function resetErrorColumns(): void {
-  webConfig.errors.columns = [...DEFAULT_VISIBLE_ERROR_COLUMNS];
+  webConfig.errors.columns = [...DEFAULT_WEB_CONFIG.errors.columns];
   renderErrorColumnsEditor(webConfig.errors.columns);
 }
 
@@ -329,14 +301,10 @@ function createErrorTextCell(
 /**
  * 创建重试操作单元格。
  * @param {ErrorData} errorData - 当前错误记录。
- * @param {string} taskText - 当前任务的序列化文本。
  * @returns {HTMLTableCellElement} 重试单元格节点。
  */
-function createRetryCell(
-  errorData: ErrorData,
-  taskText: string,
-): HTMLTableCellElement {
-  const canRetry = errorData.task_json !== undefined && !taskText.startsWith("<");
+function createRetryCell(errorData: ErrorData): HTMLTableCellElement {
+  const canRetry = errorData.task_json !== undefined;
   const retryLabel = canRetry
     ? t("errors.retryInject")
     : t("errors.retryUnavailable");
@@ -397,7 +365,7 @@ function createErrorCell(
     case "time":
       return createErrorTextCell("time", formatTimestamp(errorData.ts));
     case "retry":
-      return createRetryCell(errorData, taskText);
+      return createRetryCell(errorData);
   }
 }
 
@@ -459,11 +427,11 @@ async function loadErrors(forceReload = false): Promise<boolean> {
     errorSortOrder = data.sort_order === "oldest" ? "oldest" : "newest";
     lastQueryKey = queryKey;
 
-    if (data.data === null || data.data === undefined) {
+    if (data.data === null) {
       return false;
     }
 
-    errors = Array.isArray(data.data) ? (data.data as ErrorData[]) : []; // 仅接受数组类型结果
+    errors = data.data;
     const changed = errorsRev !== Number(data.rev); // 对比版本号判断是否有新内容
     errorsRev = Number(data.rev);
     return changed || forceReload;

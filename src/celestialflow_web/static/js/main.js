@@ -174,18 +174,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const config = webConfig; // 使用局部引用，后续事件里直接修改同一配置对象
     updateCurrentPageSettings();
     // 先渲染一轮默认空态，避免页面在首次拉取完成前出现空白区域。
-    renderMermaidStructure(nodeStatuses);
-    renderDashboard();
-    populateNodeFilter(nodeStatuses);
-    populateErrorTypeNodeFilter(nodeStatuses);
-    renderErrors();
-    renderAnalysisInfo();
+    rerenderAllViews();
     renderInjectionPage();
-    initHistoryChart();
-    updateChartData();
-    initErrorTypeChart();
-    renderErrorTypeChart();
-    renderSummary();
     // ==== 事件绑定 ====
     // 点击齿轮按钮：切换设置面板显示/隐藏
     settingsBtn.addEventListener("click", (e) => {
@@ -272,18 +262,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateCurrentPageSettings();
         updateSettingsStatusText();
         themeToggleBtn.textContent = document.body.classList.contains("dark-theme") ? t("theme.light") : t("theme.dark");
-        renderMermaidStructure(nodeStatuses);
-        renderDashboard();
-        populateNodeFilter(nodeStatuses);
-        populateErrorTypeNodeFilter(nodeStatuses);
-        renderErrors();
-        renderAnalysisInfo();
+        rerenderAllViews();
         renderNodeList();
         refreshInjectionLocalizedText();
-        initHistoryChart();
-        updateChartData();
-        initErrorTypeChart();
-        renderErrorTypeChart();
         showSettingsSaveStatus(await saveWebConfig() ? "settings.saveSuccess" : "settings.saveFailed");
     });
     // 切换明暗主题：更新样式并重新渲染图表
@@ -306,6 +287,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     refreshAll(); // 启动轮询
     syncAutoRefreshTimer();
 });
+/**
+ * 重绘全部视图区域
+ *
+ * 初始化空态与切换语言共用同一份调用序列，避免各处漏刷或多刷。
+ * 注入页不在其中：两条路径需要不同的刷新粒度（整页重绘 / 仅文案重绘）。
+ * @returns {void}
+ */
+function rerenderAllViews() {
+    renderMermaidStructure(nodeStatuses);
+    renderDashboard();
+    populateNodeFilter(nodeStatuses);
+    populateErrorTypeNodeFilter(nodeStatuses);
+    renderErrors();
+    renderAnalysisInfo();
+    initHistoryChart();
+    updateChartData();
+    initErrorTypeChart();
+    renderErrorTypeChart();
+    renderSummary();
+}
 /**
  * 主刷新函数：协调所有数据的更新和 UI 渲染
  * 并行拉取节点状态、结构、错误、拓扑和汇总数据

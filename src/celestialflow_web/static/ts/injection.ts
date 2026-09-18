@@ -34,19 +34,14 @@ function setLocalizedMessageMeta(
 
 /**
  * 读取元素上缓存的 i18n 占位参数。
+ * 写入方只有 `setLocalizedMessageMeta`，其值恒为 `JSON.stringify(string[])`。
  *
  * @param {HTMLElement} element - 目标元素
  * @returns {string[]} 占位参数列表
  */
 function getLocalizedMessageArgs(element: HTMLElement): string[] {
   const rawArgs = element.dataset.messageArgs;
-  if (!rawArgs) return [];
-  try {
-    const parsed = JSON.parse(rawArgs);
-    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
-  } catch {
-    return [];
-  }
+  return rawArgs ? (JSON.parse(rawArgs) as string[]) : [];
 }
 
 /**
@@ -281,9 +276,8 @@ function renderCurrentNodeEditor(): void {
   const currentTagEl = document.getElementById("current-node-tag"); // 当前节点标题右侧 tag
   const textarea = getJsonTextarea(); // JSON 编辑框
   if (!currentNodeEl || !currentTagEl) return;
-  const hasNode = Boolean(currentNodeName); // 当前是否已有选中的可编辑节点
 
-  if (!hasNode) {
+  if (!currentNodeName) {
     // 未选择节点时，编辑器进入只读提示状态。
     currentNodeEl.textContent = t("injection.noNodeSelected");
     currentTagEl.textContent = "";
@@ -293,8 +287,7 @@ function renderCurrentNodeEditor(): void {
     textarea.disabled = true;
     setValidationMessage("injection.validationSelectNode", "neutral");
   } else {
-    const currentNode = currentNodeName; // 收窄后的当前节点名
-    if (!currentNode) return;
+    const currentNode = currentNodeName; // 已被上方分支收窄
     // 已选择节点时，恢复该节点草稿并实时显示“已编辑”状态。
     currentNodeEl.textContent = currentNode;
     const hasDraft = Boolean((nodeDrafts[currentNode] || "").trim());
@@ -307,7 +300,7 @@ function renderCurrentNodeEditor(): void {
   }
 
   for (const button of getEditorButtons()) {
-    button.disabled = !hasNode;
+    button.disabled = !currentNodeName;
   }
 }
 
@@ -427,7 +420,7 @@ function buildPendingInjectionPayload(): {
 
     if (!invalidNode) {
       invalidNode = nodeName;
-      invalidReason = "reason" in parsed ? parsed.reason : "invalid_json";
+      invalidReason = parsed.reason;
     }
   }
 
@@ -465,7 +458,7 @@ function renderDraftList(): void {
     if (parsed.ok) {
       previewPayload[nodeName] = parsed.taskList;
     } else {
-      const reason = "reason" in parsed ? parsed.reason : "invalid_json";
+      const reason = parsed.reason;
       previewPayload[nodeName] =
         reason === "invalid_json"
           ? {
@@ -533,7 +526,7 @@ function validateCurrentDraft(showSyntaxError = true): boolean {
     return true;
   }
 
-  const reason = "reason" in parsed ? parsed.reason : "invalid_json";
+  const reason = parsed.reason;
   setValidationMessage(
     reason === "invalid_json"
       ? "injection.invalidJson"

@@ -3,11 +3,6 @@
  * 卡片布局编辑器
  * 悬浮窗口中用拖拽方式管理仪表盘左中右三栏的卡片排列
  */
-const DEFAULT_LAYOUT = {
-    left: ["mermaid", "analysis"],
-    middle: ["status"],
-    right: ["progress", "error-types", "summary"],
-}; // 默认三栏布局，用于首次启动和重置
 let originalLayout = {
     left: [],
     middle: [],
@@ -32,30 +27,24 @@ function renderCard(cardId) {
     <span class="layout-card-handle" aria-hidden="true">⠿</span>`;
     return el;
 }
-/** 打开布局编辑器，读取当前配置并渲染 */
-function openLayoutEditor() {
-    const overlay = document.getElementById("layout-editor-overlay"); // 布局编辑器遮罩层
-    overlay.classList.remove("hidden");
-    const layout = webConfig.dashboard.layout; // 当前生效布局
-    originalLayout = {
-        left: [...(layout.left ?? [])],
-        middle: [...(layout.middle ?? [])],
-        right: [...(layout.right ?? [])],
-    };
+/**
+ * 按给定布局重绘三栏与未使用卡片池。
+ * @param {DashboardLayout} layout - 要渲染的布局
+ * @returns {void}
+ */
+function renderLayoutZones(layout) {
     const usedIds = new Set([
-        ...(layout.left ?? []),
-        ...(layout.middle ?? []),
-        ...(layout.right ?? []),
-    ]); // 当前已经被占用的卡片 ID
-    // 渲染三栏
+        ...layout.left,
+        ...layout.middle,
+        ...layout.right,
+    ]); // 已经被三栏占用的卡片 ID
     for (const col of ["left", "middle", "right"]) {
         const zone = document.getElementById(`layout-dropzone-${col}`); // 当前栏位的拖放区域
         zone.innerHTML = "";
-        for (const cardId of layout[col] ?? []) {
+        for (const cardId of layout[col]) {
             zone.appendChild(renderCard(cardId));
         }
     }
-    // 渲染未使用池
     const unusedZone = document.getElementById("layout-dropzone-unused"); // 未使用卡片池
     unusedZone.innerHTML = "";
     for (const cardId of ALL_CARD_IDS) {
@@ -63,6 +52,18 @@ function openLayoutEditor() {
             unusedZone.appendChild(renderCard(cardId));
         }
     }
+}
+/** 打开布局编辑器，读取当前配置并渲染 */
+function openLayoutEditor() {
+    const overlay = document.getElementById("layout-editor-overlay"); // 布局编辑器遮罩层
+    overlay.classList.remove("hidden");
+    const layout = webConfig.dashboard.layout; // 当前生效布局
+    originalLayout = {
+        left: [...layout.left],
+        middle: [...layout.middle],
+        right: [...layout.right],
+    };
+    renderLayoutZones(layout);
     initSortable();
 }
 /** 关闭编辑器 */
@@ -84,9 +85,7 @@ function closeLayoutEditor(restore = true) {
 function initSortable() {
     destroySortableInstances();
     for (const id of LAYOUT_ZONE_IDS) {
-        const zone = document.getElementById(id);
-        if (!zone)
-            continue;
+        const zone = document.getElementById(id); // 拖拽区为静态模板元素，必然存在
         // 每个区域都加入同一 group，这样卡片可以跨栏位拖拽。
         sortableInstances[id] = Sortable.create(zone, {
             group: "dashboard-layout",
@@ -139,31 +138,12 @@ async function saveLayout() {
 }
 /** 重置为默认布局（清空所有栏并重新渲染） */
 function resetLayout() {
-    // 先把运行时布局恢复成默认值。
     webConfig.dashboard.layout = {
-        left: [...DEFAULT_LAYOUT.left],
-        middle: [...DEFAULT_LAYOUT.middle],
-        right: [...DEFAULT_LAYOUT.right],
+        left: [...DEFAULT_WEB_CONFIG.dashboard.layout.left],
+        middle: [...DEFAULT_WEB_CONFIG.dashboard.layout.middle],
+        right: [...DEFAULT_WEB_CONFIG.dashboard.layout.right],
     };
-    const usedIds = new Set([
-        ...DEFAULT_LAYOUT.left,
-        ...DEFAULT_LAYOUT.middle,
-        ...DEFAULT_LAYOUT.right,
-    ]); // 默认布局中已经使用到的卡片 ID
-    for (const col of ["left", "middle", "right"]) {
-        const zone = document.getElementById(`layout-dropzone-${col}`); // 当前栏位拖放区域
-        zone.innerHTML = "";
-        for (const cardId of webConfig.dashboard.layout[col]) {
-            zone.appendChild(renderCard(cardId));
-        }
-    }
-    const unusedZone = document.getElementById("layout-dropzone-unused"); // 未使用卡片池
-    unusedZone.innerHTML = "";
-    for (const cardId of ALL_CARD_IDS) {
-        if (!usedIds.has(cardId)) {
-            unusedZone.appendChild(renderCard(cardId));
-        }
-    }
+    renderLayoutZones(webConfig.dashboard.layout);
     initSortable();
 }
 // ── 事件绑定 ──────────────────────────────────────────

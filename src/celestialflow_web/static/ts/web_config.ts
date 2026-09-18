@@ -78,16 +78,6 @@ const DEFAULT_WEB_CONFIG: WebConfig = {
   },
 };
 
-const DEFAULT_ERROR_COLUMNS: ErrorColumnKey[] = [
-  "index",
-  "event_id",
-  "message",
-  "stage",
-  "task",
-  "time",
-  "retry",
-];
-
 /** 仪表盘栏位 key 到真实 DOM 选择器的映射。 */
 const PANEL_SELECTOR_MAP: Record<DashboardColumnKey, string> = {
   left: ".left-panel",
@@ -128,15 +118,15 @@ function normalizeDashboardLayout(
 function normalizeErrorColumns(
   rawColumns?: ErrorColumnKey[] | null,
 ): ErrorColumnKey[] {
+  const defaults = DEFAULT_WEB_CONFIG.errors.columns;
   if (!Array.isArray(rawColumns)) {
-    return [...DEFAULT_ERROR_COLUMNS];
+    return [...defaults];
   }
-  const validColumns = new Set(DEFAULT_ERROR_COLUMNS);
-  const dedupedColumns = rawColumns.filter(
+  const validColumns = new Set(defaults);
+  return rawColumns.filter(
     (column, index) =>
       validColumns.has(column) && rawColumns.indexOf(column) === index,
   );
-  return dedupedColumns;
 }
 
 /**
@@ -580,28 +570,25 @@ function applyConfig(): void {
 function applyDashboardLayout(): void {
   ensureAllCards();
   const dashboard = webConfig.dashboard.layout; // 当前配置中的三栏布局
+  // 并集保留配置里可能残留的历史卡片 ID：这类 ID 没有对应 DOM，
+  // 会在下方查询里得到 null 并被跳过。
   const allCardKeys = Array.from(
     new Set([
-      "mermaid",
-      "analysis",
-      "status",
-      "progress",
-      "error-types",
-      "summary",
-      ...(dashboard.left || []),
-      ...(dashboard.middle || []),
-      ...(dashboard.right || []),
+      ...ALL_CARD_IDS,
+      ...dashboard.left,
+      ...dashboard.middle,
+      ...dashboard.right,
     ]),
   );
   const cardElements: Record<string, HTMLElement | null> = Object.fromEntries(
     allCardKeys.map((key) => [key, document.querySelector(`.${key}-card`)]),
   ); // 所有可能涉及的卡片 DOM 引用
-  const panelElements: Record<DashboardColumnKey, HTMLElement | null> = Object.fromEntries(
+  const panelElements = Object.fromEntries(
     Object.entries(PANEL_SELECTOR_MAP).map(([key, selector]) => [
       key,
-      document.querySelector(selector),
+      document.querySelector<HTMLElement>(selector)!,
     ]),
-  ) as Record<DashboardColumnKey, HTMLElement | null>; // 三个栏位容器的 DOM 引用
+  ) as Record<DashboardColumnKey, HTMLElement>; // 三个栏位容器的 DOM 引用（静态模板元素）
 
   // 1) 先把所有已知卡片隐藏：未被任何栏位接收的卡片（配置里删掉但 DOM 还在）
   //    会保持隐藏，不会变成幽灵卡片
@@ -613,8 +600,7 @@ function applyDashboardLayout(): void {
   //    每个栏位内部再按数组顺序依次 appendChild，实现“任意栏位 + 任意顺序”
   for (const panelKey of Object.keys(PANEL_SELECTOR_MAP) as DashboardColumnKey[]) {
     const panelEl = panelElements[panelKey]; // 当前处理的栏位容器
-    const panelCardKeys = dashboard[panelKey] || []; // 当前栏位配置中的卡片顺序
-    if (!panelEl) continue;
+    const panelCardKeys = dashboard[panelKey]; // 当前栏位配置中的卡片顺序
 
     // 3) 对当前栏位中的每一张卡片：
     //    - 通过 .{key}-card 找到真实 DOM

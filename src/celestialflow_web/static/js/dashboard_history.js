@@ -3,6 +3,13 @@
  * 处理进度历史模块
  * 维护节点处理任务的历史序列，并使用 Chart.js 绘制进度折线图
  */
+/** 趋势类指标到其累计来源字段的映射 */
+const DELTA_SOURCE_METRIC = {
+    delta_tasks_processed: "tasks_processed",
+    delta_tasks_succeeded: "tasks_succeeded",
+    delta_tasks_failed: "tasks_failed",
+    delta_tasks_duplicated: "tasks_duplicated",
+};
 // 全局状态
 let nodeHistories = {}; // 各节点的处理进度历史
 let progressChart = null; // Chart.js 折线图实例
@@ -39,27 +46,27 @@ function getColor(index) {
  * @returns {Record<string, Array<{ x: number; y: number }>>} 图表使用的坐标点映射
  */
 function extractProgressData(histories, metric) {
-    const isDelta = metric.startsWith("delta_"); // delta_ 前缀表示要计算变化率
-    const sourceMetric = metric.replace("delta_", "");
-    const directMetric = metric;
     const result = {};
     for (const [node, data] of Object.entries(histories)) {
-        if (isDelta) {
+        if (isDeltaMetric(metric)) {
             // 趋势指标使用相邻采样点差值 / 时间差来近似每秒速率。
+            const sourceMetric = DELTA_SOURCE_METRIC[metric];
             result[node] = data.map((point, i) => {
                 if (i === 0)
                     return { x: point.timestamp, y: 0 };
                 const prev = data[i - 1];
                 const dt = point.timestamp - prev.timestamp || 1;
-                const dy = Number(point[sourceMetric] || 0) - Number(prev[sourceMetric] || 0);
-                return { x: point.timestamp, y: dy / dt };
+                return {
+                    x: point.timestamp,
+                    y: (point[sourceMetric] - prev[sourceMetric]) / dt,
+                };
             });
         }
         else {
             // 累计类指标直接读取采样点原始字段值。
             result[node] = data.map((point) => ({
                 x: point.timestamp,
-                y: Number(point[directMetric] || 0),
+                y: point[metric],
             }));
         }
     }
@@ -140,6 +147,16 @@ function initHistoryMetricSwitcher() {
 }
 initHistoryMetricSwitcher();
 /**
+ * 判断指标是否为趋势类指标。
+ *
+ * 展开为类型谓词，使调用方无需再对 `HistoryMetricKey` 做类型断言。
+ * @param {HistoryMetricKey} metric - 指标键
+ * @returns {boolean} 是否为趋势类指标
+ */
+function isDeltaMetric(metric) {
+    return metric in DELTA_SOURCE_METRIC;
+}
+/**
  * 获取当前历史曲线保留点数限制
  * @returns {number} 归一化后的历史长度限制，最小为 1。
  */
@@ -148,15 +165,22 @@ function getCurrentHistoryLimit() {
     return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 20;
 }
 /**
+ * 按当前配置裁剪单个节点的历史序列
+ * @param {NodeHistory} history - 待裁剪的历史序列
+ * @returns {NodeHistory} 裁剪后的历史序列
+ */
+function trimHistory(history) {
+    return history.slice(-getCurrentHistoryLimit());
+}
+/**
  * 按当前配置裁剪前端本地维护的历史点数量
  * @returns {boolean} 历史数据是否发生了变化。
  */
 function trimNodeHistories() {
-    const historyLimit = getCurrentHistoryLimit();
     let changed = false;
     const nextHistories = {};
     for (const [node, history] of Object.entries(nodeHistories)) {
-        const trimmed = history.slice(-historyLimit);
+        const trimmed = trimHistory(history);
         nextHistories[node] = trimmed;
         if (trimmed.length !== history.length) {
             changed = true;
@@ -177,7 +201,6 @@ function appendStatusSnapshotToHistory(timestamp, statuses, estimates, previousS
     if (!Number.isFinite(timestamp) || timestamp <= 0) {
         return false;
     }
-    const historyLimit = getCurrentHistoryLimit(); // 当前允许保留的最大历史点数
     let changed = false; // 标记历史缓存是否发生变化
     const nextHistories = {}; // 下一轮完整历史映射
     for (const [node, status] of Object.entries(statuses)) {
@@ -223,7 +246,7 @@ function appendStatusSnapshotToHistory(timestamp, statuses, estimates, previousS
                 changed = true;
             }
         }
-        const trimmed = history.slice(-historyLimit); // 控制前端内存和图表长度
+        const trimmed = trimHistory(history); // 控制前端内存和图表长度
         if (trimmed.length !== history.length) {
             changed = true;
         }
