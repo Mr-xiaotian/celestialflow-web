@@ -40,13 +40,11 @@ function getColor(index) {
  */
 function extractProgressData(histories, metric) {
     const isDelta = metric.startsWith("delta_"); // delta_ 前缀表示要计算变化率
-    const sourceMetric = isDelta
-        ? metric.replace("delta_", "")
-        : null;
-    const directMetric = isDelta ? null : metric;
+    const sourceMetric = metric.replace("delta_", "");
+    const directMetric = metric;
     const result = {};
     for (const [node, data] of Object.entries(histories)) {
-        if (isDelta && sourceMetric) {
+        if (isDelta) {
             // 趋势指标使用相邻采样点差值 / 时间差来近似每秒速率。
             result[node] = data.map((point, i) => {
                 if (i === 0)

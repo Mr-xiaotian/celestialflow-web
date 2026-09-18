@@ -193,7 +193,7 @@ function refreshNodeEstimates() {
         : { ...pendingMap };
     const nextEstimates = {};
     for (const [name, status] of Object.entries(nodeStatuses)) {
-        const totalPending = totalPendingMap[name] ?? 0;
+        const totalPending = totalPendingMap[name];
         nextEstimates[name] = {
             total_tasks_pending: totalPending,
             total_remaining_time: calcRemaining(Number(status.tasks_processed || 0), totalPending, Number(status.elapsed_time || 0)),

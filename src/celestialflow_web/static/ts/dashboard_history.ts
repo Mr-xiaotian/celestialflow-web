@@ -78,14 +78,12 @@ function extractProgressData(
   metric: HistoryMetricKey,
 ): Record<string, Array<{ x: number; y: number }>> {
   const isDelta = metric.startsWith("delta_"); // delta_ 前缀表示要计算变化率
-  const sourceMetric = isDelta
-    ? (metric.replace("delta_", "") as keyof NodeHistoryPoint)
-    : null;
-  const directMetric = isDelta ? null : (metric as keyof NodeHistoryPoint);
+  const sourceMetric = metric.replace("delta_", "") as keyof NodeHistoryPoint;
+  const directMetric = metric as keyof NodeHistoryPoint;
 
   const result: Record<string, Array<{ x: number; y: number }>> = {};
   for (const [node, data] of Object.entries(histories)) {
-    if (isDelta && sourceMetric) {
+    if (isDelta) {
       // 趋势指标使用相邻采样点差值 / 时间差来近似每秒速率。
       result[node] = data.map((point, i) => {
         if (i === 0) return { x: point.timestamp, y: 0 };
@@ -99,7 +97,7 @@ function extractProgressData(
       // 累计类指标直接读取采样点原始字段值。
       result[node] = data.map((point) => ({
         x: point.timestamp,
-        y: Number(point[directMetric as keyof NodeHistoryPoint] || 0),
+        y: Number(point[directMetric] || 0),
       }));
     }
   }

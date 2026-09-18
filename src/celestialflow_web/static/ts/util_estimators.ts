@@ -1,7 +1,7 @@
 /**
  * 图级派生指标估算模块
- * 前端本地复刻 CelestialFlow 的图级估算逻辑：仅依赖同一次状态快照中的原始计数与
- * 静态拓扑，推算各节点的全局待处理任务量与预计剩余时间。
+ * 前端自有的图级估算：仅依赖同一次状态快照中的原始计数与静态拓扑，
+ * 推算各节点的全局待处理任务量与预计剩余时间。
  */
 
 /** 有向边邻接表：{上游节点: [下游节点, ...]} */
@@ -72,37 +72,9 @@ function topoSort(edges: GraphEdges): string[] | null {
 }
 
 /**
- * Neumaier 补偿求和
- *
- * 对齐 CPython 3.12+ 中 `sum()` 对 float 的实现（Neumaier 补偿求和），使结果与
- * CelestialFlow 的 Python 侧逐位一致。由于补偿项吸收了浮点结合顺序带来的误差，
- * 结果也不再依赖上游节点的遍历顺序（JS 会重排整数型对象键，而 Python 保持插入序）。
- *
- * @param {number[]} values - 待求和的浮点值列表
- * @returns {number} 补偿求和结果
- */
-function compensatedSum(values: number[]): number {
-  let sum = 0;
-  let compensation = 0;
-
-  for (const value of values) {
-    const next = sum + value;
-    if (Math.abs(sum) >= Math.abs(value)) {
-      compensation += sum - next + value;
-    } else {
-      compensation += value - next + sum;
-    }
-    sum = next;
-  }
-
-  return sum + compensation;
-}
-
-/**
  * 基于任务图（DAG）估算各节点全局待处理任务数量（偏保守 / 拥塞放大型）
  *
- * 与 CelestialFlow 的 `calc_global_pending` 保持逐行等价。对每个上游-下游组合维护
- * 独立放大系数：
+ * 对每个上游-下游组合维护独立放大系数：
  *
  *     scale[u][w] = total_u * output_u->w / max(1, proc_u)
  *
@@ -115,8 +87,7 @@ function compensatedSum(values: number[]): number {
  * 放大；`seen_v = processed_v + pending_v`。预计剩余任务数为
  * `max(pending_v, total_v - processed_v)`。
  *
- * 结果与拓扑序的具体选择无关：处理任一节点时其全部前驱均已定型，因此本地自行排序
- * 与后端排序得到相同取值。
+ * 按拓扑序单趟传播：处理任一节点时其全部前驱均已定型。
  *
  * @param {GraphEdges} edges - 有向边邻接表，节点需与 map 的 key 对应
  * @param {CountMap} processedMap - 每个节点已完成的任务数量
@@ -156,10 +127,11 @@ function calcGlobalPending(
         receivedSum += downstreamMap[pred]?.[node] || 0;
       }
       const external = Math.max(0, seen - receivedSum);
-      // 外部注入不参与上游放大；上游部分与 Python 一致，先做补偿求和再单独相加
-      const upstreamTotal = compensatedSum(
-        preds.map((pred) => scale[pred][node]),
-      );
+      // 外部注入不参与上游放大；上游部分累加各上游的预计输出量
+      let upstreamTotal = 0;
+      for (const pred of preds) {
+        upstreamTotal += scale[pred][node];
+      }
       total = external + upstreamTotal;
     }
 

@@ -68,37 +68,16 @@ function getNodeShape(className?: string): string {
 /**
  * 根据节点形状类型生成 Mermaid 语法的标签
  * @param {string} label - 节点显示的文本
- * @param {string} [shape="box"] - 形状类型，可选值包括 `box`、`circle`、`round`、`rhombus`、`subgraph`、`parallelogram`、`db`、`cloud`、`hex`、`arrow`。
+ * @param {string} shape - 形状类型，取自 `getNodeShape`，可选值包括 `box`、`rhombus`、`subgraph`
  * @returns {string} 包含形状定义的 Mermaid 节点标签
  */
-function getShapeWrappedLabel(label: string, shape: string = "box"): string {
+function getShapeWrappedLabel(label: string, shape: string): string {
   switch (shape) {
-    case "circle": // Circle nodes
-      return `((${label}))`;
-
-    case "round": // Rounded box
-      return `(${label})`;
-
     case "rhombus": // Diamond (decision)
       return `{{${label}}}`;
 
     case "subgraph": // Subroutine / Module block
       return `[[${label}]]`;
-
-    case "parallelogram": // IO style block
-      return `[/ ${label} /]`.replace(/\s+/g, "");
-
-    case "db": // Database cylinder
-      return `[( ${label} )]`;
-
-    case "cloud":
-      return `(${label}):::cloud`; // requires styling externally
-
-    case "hex":
-      return `{{{${label}}}}`; // triple braces style
-
-    case "arrow": // non-standard, custom arrow-like node
-      return `>${label}]`;
 
     default: // Default rectangular box
       return `[${label}]`;

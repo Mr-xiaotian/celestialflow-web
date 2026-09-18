@@ -33,17 +33,6 @@ function setLocalizedMessageMeta(
 }
 
 /**
- * 清理元素上缓存的 i18n 元信息。
- *
- * @param {HTMLElement} element - 目标元素
- * @returns {void}
- */
-function clearLocalizedMessageMeta(element: HTMLElement): void {
-  delete element.dataset.messageKey;
-  delete element.dataset.messageArgs;
-}
-
-/**
  * 读取元素上缓存的 i18n 占位参数。
  *
  * @param {HTMLElement} element - 目标元素
@@ -518,20 +507,6 @@ function setValidationMessage(
   setLocalizedMessageMeta(validationDiv, messageKey, args);
   validationDiv.textContent = t(messageKey, ...args);
   validationDiv.className = `validation-message validation-${state}`;
-}
-
-/**
- * 清空编辑区下方的提示文字。
- *
- * @returns {void}
- */
-function clearValidationMessage(): void {
-  const validationDiv = document.getElementById(
-    "json-validation",
-  ) as HTMLElement;
-  clearLocalizedMessageMeta(validationDiv);
-  validationDiv.textContent = "";
-  validationDiv.className = "validation-message";
 }
 
 /**

@@ -602,9 +602,9 @@ function applyDashboardLayout(): void {
       document.querySelector(selector),
     ]),
   ) as Record<DashboardColumnKey, HTMLElement | null>; // 三个栏位容器的 DOM 引用
-  const assigned = new Set(); // 记录已经被成功挂到某个栏位的卡片
 
-  // 1) 先把所有已知卡片隐藏，避免卡片从旧布局残留在错误栏位
+  // 1) 先把所有已知卡片隐藏：未被任何栏位接收的卡片（配置里删掉但 DOM 还在）
+  //    会保持隐藏，不会变成幽灵卡片
   for (const cardEl of Object.values(cardElements)) {
     if (cardEl) cardEl.style.display = "none";
   }
@@ -626,16 +626,6 @@ function applyDashboardLayout(): void {
 
       panelEl.appendChild(cardEl);
       cardEl.style.display = "";
-
-      assigned.add(cardKey);
     }
-  }
-
-  // 4) 兜底：没有被任何栏位接收的卡片统一隐藏
-  //    防止“配置里删掉某卡片但 DOM 还存在”时出现幽灵卡片
-  for (const cardKey of Object.keys(cardElements)) {
-    if (assigned.has(cardKey)) continue;
-    const cardEl = cardElements[cardKey];
-    if (cardEl) cardEl.style.display = "none";
   }
 }
