@@ -34,6 +34,7 @@ let nodeStatuses: Record<string, NodeStatus> = {}; // 当前各节点运行状�
 let lastNodeStatuses: Record<string, NodeStatus> = {}; // 上一轮状态快照，用于计算增量
 let statusRev = -1; // 上次拉取的数据版本号，-1 表示首次拉取全量
 let statusesRequestSeq = 0; // 请求序列号，防止旧状态响应覆盖新结果
+let lastStatusTimestamp = 0; // 最近一次状态快照的统一时间戳，供历史曲线记录使用
 
 // DOM 元素引用
 const dashboardGrid = document.getElementById("dashboard-grid") as HTMLElement;
@@ -216,7 +217,7 @@ function renderElapsedDurationHtml(
 
 /**
  * 异步加载最新的节点状态数据
- * 从后端 API 获取节点状态，更新全局变量并同步前端本地历史曲线
+ * 从后端 API 获取节点状态并更新全局变量；全局估算与历史曲线同步由 `refreshAll` 收口处理
  * @returns {Promise<boolean>} 当状态版本发生变化并成功更新时返回 `true`，否则返回 `false`。
  */
 async function loadStatuses(): Promise<boolean> {
@@ -229,15 +230,54 @@ async function loadStatuses(): Promise<boolean> {
     lastNodeStatuses = nodeStatuses;
     nodeStatuses = body.data;
     statusRev = body.rev;
-    appendStatusSnapshotToHistory(
-      Number(body.timestamp || 0),
-      nodeStatuses,
-      lastNodeStatuses,
-    );
+    lastStatusTimestamp = Number(body.timestamp || 0);
     return true;
   } catch (e) {
     console.error("状态加载失败", e);
     return false;
+  }
+}
+
+/**
+ * 用前端本地估算覆盖后端推送的图级派生字段
+ *
+ * 计算 `total_tasks_pending` 与 `total_remaining_time` 需要同一快照内的原始计数、
+ * 每边输出量以及静态拓扑（结构）与是否为 DAG（分析）。结构或分析尚未就绪时直接返回，
+ * 保留后端推送的原值，避免在拓扑缺失时静默算出退化的结果。
+ * @returns {void}
+ */
+function applyGlobalEstimates(): void {
+  if (!structureData.nodes.length || !analysisData) {
+    return; // 结构或分析数据尚未就绪
+  }
+
+  const processedMap: CountMap = {};
+  const pendingMap: CountMap = {};
+  const downstreamMap: DownstreamMap = {};
+  for (const [name, status] of Object.entries(nodeStatuses)) {
+    processedMap[name] = Number(status.tasks_processed || 0);
+    pendingMap[name] = Number(status.tasks_pending || 0);
+    downstreamMap[name] = { ...(status.downstream_counts || {}) };
+  }
+
+  // 非 DAG 无法拓扑传播，全局待处理量退化为节点自身的待处理量
+  const totalPendingMap: CountMap = analysisData.isDAG
+    ? calcGlobalPending(
+        structureData.edges,
+        processedMap,
+        pendingMap,
+        downstreamMap,
+      )
+    : { ...pendingMap };
+
+  for (const [name, status] of Object.entries(nodeStatuses)) {
+    const totalPending = totalPendingMap[name] ?? 0;
+    status.total_tasks_pending = totalPending;
+    status.total_remaining_time = calcRemaining(
+      Number(status.tasks_processed || 0),
+      totalPending,
+      Number(status.elapsed_time || 0),
+    );
   }
 }
 

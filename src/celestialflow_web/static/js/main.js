@@ -324,6 +324,14 @@ async function refreshAll() {
         loadAnalysis(), // 获取最新分析信息，更新 analysisData
         loadErrorTypeCounts(), // 获取错误类型聚合结果，更新仪表盘扇形图
     ]);
+    // 图级派生指标由前端本地估算：必须在结构与分析数据就绪后、渲染之前统一收口。
+    if (statusesChanged || structureChanged || analysisChanged) {
+        applyGlobalEstimates();
+    }
+    // 历史曲线依赖上一步算出的 total_tasks_pending，因此延后到估算完成后再记录。
+    if (statusesChanged) {
+        appendStatusSnapshotToHistory(lastStatusTimestamp, nodeStatuses, lastNodeStatuses);
+    }
     // 结构图依赖结构数据，也会用节点状态给节点着色。
     if (statusesChanged || structureChanged) {
         renderMermaidStructure(nodeStatuses); // 左上结构图, 依赖节点信息与结构信息
