@@ -1,4 +1,10 @@
 # tests/test_server.py
+import re
+from pathlib import Path
+
+from celestialflow_web.server.core_server import static_path
+
+
 def _push_graph_meta(client, graph_id: str):
     """推送一份最小图元信息，用于建立 graph 上下文；返回响应供调用方断言状态码。"""
     return client.post(
@@ -158,6 +164,19 @@ def test_index_page(client):
     assert "html" in response.headers["content-type"]
     # 验证模板是否包含关键元素
     assert 'id="dashboard"' in response.text
+
+def test_index_page_scripts_match_build_output(client):
+    """首页引用的 js 与编译产物必须一一对应。
+
+    前端没有模块系统，脚本加载清单靠在 templates 里手写，因此“漏引一个产物”
+    或“引用了不存在的产物”都只会在浏览器里静默失败，需要在这里卡住。
+    """
+    html = client.get("/").text
+    referenced = set(re.findall(r"js/([\w.-]+\.js)", html))
+    built = {path.name for path in (Path(static_path) / "js").glob("*.js")}
+
+    assert referenced == built
+
 
 def test_config_api(client):
     """测试配置拉取 API：验证前端能够获取到刷新间隔、主题等运行时配置"""

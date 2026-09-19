@@ -1,49 +1,10 @@
 /**
  * 全局类型声明文件
- * 包含外部库（Chart.js, Sortable.js, Mermaid）的最小类型定义
- * 以及由其他脚本导出的全局变量和函数
+ *
+ * 只含两部分：外部库（Chart.js / Sortable.js / Mermaid）的最小类型定义，
+ * 以及由其他脚本导出的全局变量与函数声明。
+ * 前后端契约类型见 types.d.ts。
  */
-
-type DashboardColumnKey = "left" | "middle" | "right"; // 仪表盘三栏布局 key
-
-type DashboardLayout = Record<DashboardColumnKey, string[]>; // 每个栏位内的卡片 ID 顺序
-
-type ErrorColumnKey =
-  | "index"
-  | "event_id"
-  | "message"
-  | "stage"
-  | "task"
-  | "time"
-  | "retry"; // 错误日志表格可配置字段 key
-
-type ApiVersionedResponse<T> = {
-  rev: number; // 当前数据版本号
-  data: T | null; // 当 known_rev 未变化时可能返回 null
-};
-
-type StatusPullResponse = ApiVersionedResponse<Record<string, NodeStatus>> & {
-  timestamp: number; // 本次状态快照的统一时间戳
-};
-
-type GraphMetaPullResponse = ApiVersionedResponse<GraphMeta>; // 图元信息拉取响应
-
-type ErrorsPullResponse = {
-  rev: number; // 错误数据版本号
-  page: number; // 当前页码
-  page_size: number; // 每页条数
-  total: number; // 总记录数
-  total_pages: number; // 总页数
-  sort_order: "newest" | "oldest"; // 当前排序顺序
-  data: ErrorData[] | null; // 当前页的错误记录
-};
-
-type ErrorTypeCount = {
-  error_type: string; // 错误类型名称
-  count: number; // 该类型的错误条数
-};
-
-type ErrorTypeCountsPullResponse = ApiVersionedResponse<ErrorTypeCount[]>; // 错误类型聚合响应
 
 declare function preloadInjectionDraftFromError(
   nodeName: string,

@@ -1,4 +1,10 @@
 "use strict";
+/**
+ * Web 端全局配置的加载、规范化与落盘
+ *
+ * 配置结构定义见 types.d.ts；`LegacyWebConfig` 是仅服务于旧配置迁移的中间形状，
+ * 不属于对外契约，因此留在本文件。
+ */
 /** 页面初始化和回退场景共用的默认配置。 */
 const DEFAULT_WEB_CONFIG = {
     global: {

@@ -1,39 +1,9 @@
 /**
- * Web 端全局配置结构定义
+ * Web 端全局配置的加载、规范化与落盘
+ *
+ * 配置结构定义见 types.d.ts；`LegacyWebConfig` 是仅服务于旧配置迁移的中间形状，
+ * 不属于对外契约，因此留在本文件。
  */
-type WebGlobalConfig = {
-  theme: "light" | "dark"; // 界面主题
-  autoRefreshEnabled: boolean; // 是否启用自动轮询刷新
-  refreshInterval: number; // 全局轮询刷新间隔（毫秒）
-  language: Lang; // 界面语言
-};
-
-type StructureEdgeLabel = "none" | "delta" | "cumulative"; // 结构图边标签显示模式：无 / 增量 / 累计
-
-type WebDashboardConfig = {
-  historyLimit: number; // 节点处理历史记录保留条数
-  structureEdgeLabel: StructureEdgeLabel; // 结构图边标签显示模式
-  useTotalPendingInStatus: boolean; // 节点状态卡是否使用 total_tasks_pending
-  layout: DashboardLayout; // 仪表盘左右中三栏的卡片布局
-};
-
-type WebErrorsConfig = {
-  pageSize: number; // 错误日志每页显示条数
-  sortOrder: "newest" | "oldest"; // 错误日志默认排序方式
-  jumpToInjectionAfterRetry: boolean; // 错误日志点击任务注入后是否切换到任务注入页
-  columns: ErrorColumnKey[]; // 错误日志表格当前显示字段与顺序
-};
-
-type WebInjectionConfig = {
-  showInjectableOnly: boolean; // 注入页是否只显示可注入节点
-};
-
-type WebConfig = {
-  global: WebGlobalConfig; // 全局共享配置
-  dashboard: WebDashboardConfig; // 仪表盘页配置
-  errors: WebErrorsConfig; // 错误页配置
-  injection: WebInjectionConfig; // 注入页配置
-};
 
 type LegacyWebConfig = {
   theme?: "light" | "dark";

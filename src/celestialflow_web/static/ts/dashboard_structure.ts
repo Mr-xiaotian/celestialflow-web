@@ -1,63 +1,11 @@
 /**
  * 图元信息展示模块
  *
- * 负责图元信息（图拓扑 + 节点构建期元信息 + 图分析结果）的一次性拉取，
- * 并用 Mermaid.js 将任务有向图渲染为流程图，根据节点状态实时着色
+ * 用 Mermaid.js 将任务有向图渲染为流程图，并根据节点状态实时着色；
+ * 图元信息由 loaders.ts 提供，本文件只读不拉。
  */
 
-// 全局状态
-let graphMeta: GraphMeta = {
-  nodes: [],
-  edges: {},
-  source_nodes: [],
-  node_meta: {},
-  analysis: null,
-}; // 图元信息（有向图 + 节点元信息 + 分析结果）
-let graphMetaRev = -1; // 数据版本号，用于增量拉取
-let graphMetaRequestSeq = 0; // 请求序列号，防止旧图元信息响应覆盖新结果
-
-/** 节点的构建期元信息，不进每轮状态快照 */
-type NodeMeta = {
-  class_name: string; // 节点类名（TaskStage/TaskSplitter/TaskRouter）
-  execution_mode: string; // 运行模式（serial/thread/async）
-  max_workers: number; // 最大并发数
-};
-
-/**
- * 图元信息：图拓扑、各节点构建期元信息与图分析结果
- *
- * 三者由 reporter 在同一次 push 中原子写入，因此 `nodes` 非空即表示
- * 拓扑、`node_meta` 与 `analysis` 均已就绪。
- */
-type GraphMeta = {
-  nodes: string[]; // 全量节点名列表
-  edges: Record<string, string[]>; // 有向边邻接表
-  source_nodes: string[]; // 入度为 0 的源节点列表
-  node_meta: Record<string, NodeMeta>; // 各节点的构建期元信息
-  analysis: AnalysisData | null; // 图分析结果；reporter 尚未推送时为 null
-};
-
-/**
- * 异步加载最新的图元信息
- * 一次拉取图拓扑、节点构建期元信息与图分析结果，并更新全局变量 graphMeta
- * @returns {Promise<boolean>} 当版本发生变化并成功更新时返回 `true`，否则返回 `false`。
- */
-async function loadGraphMeta(): Promise<boolean> {
-  try {
-    const requestSeq = ++graphMetaRequestSeq; // 为当前请求分配递增序号
-    const res = await fetch(`/api/pull_graph_meta?known_rev=${graphMetaRev}`);
-    const body = (await res.json()) as GraphMetaPullResponse;
-    if (requestSeq !== graphMetaRequestSeq) return false; // 丢弃已过时请求的返回结果
-    if (body.data === null) return false;
-    graphMeta = body.data;
-    graphMetaRev = body.rev;
-    return true;
-  } catch (e) {
-    console.error("图元信息加载失败", e);
-    return false;
-  }
-}
-
+/** Mermaid 节点形状，取值由 `getNodeShape` 决定 */
 /**
  * 获取节点的唯一标识符 ID
  * @param {string} nodeName - 节点名称。

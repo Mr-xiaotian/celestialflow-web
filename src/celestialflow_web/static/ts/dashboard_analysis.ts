@@ -1,16 +1,8 @@
 /**
  * 拓扑分析展示模块
- * 负责展示图元信息中的拓扑分析结果（如是否为 DAG、图模式等）
+ * 负责展示图元信息中的拓扑分析结果（如是否为 DAG、图模式等）；
+ * 分析结果随图元信息由 loaders.ts 提供，本文件只读不拉。
  */
-
-type AnalysisData = {
-  name: string; // 任务图名称
-  startTime: number; // 任务图启动时间戳
-  className: string; // 图结构分类名称
-  isDAG: boolean; // 当前任务图是否为 DAG
-  graphMode: string; // 图级执行模式名称
-  layersDict: Record<string, unknown>; // 层级分析结果，键数量可用于统计层数
-};
 
 /**
  * 渲染分析信息面板

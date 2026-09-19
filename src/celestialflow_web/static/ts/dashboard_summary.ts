@@ -1,10 +1,8 @@
 /**
  * 全局汇总统计模块
- * 负责计算和展示整个图任务的总体进度、成功/失败总量及预计剩余时间
+ * 负责计算和展示整个图任务的总体进度、成功/失败总量及预计剩余时间；
+ * 汇总自 loaders.ts 的模型数据，本文件只读不拉。
  */
-
-// 全局状态
-let summaryRev = -1; // 数据版本号，用于增量拉取
 
 // DOM 元素引用（汇总面板）
 const totalSucceeded = document.getElementById("total-succeeded") as HTMLElement;

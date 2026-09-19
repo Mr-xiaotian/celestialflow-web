@@ -1,22 +1,15 @@
 "use strict";
 /**
  * 节点状态监控模块
- * 负责各节点运行指标（成功、失败、等待、重复、速率等）的实时展示
+ * 负责各节点运行指标（成功、失败、等待、重复、速率等）的实时展示；
+ * 数据由 loaders.ts 提供，本文件只读不拉。
  */
-// 全局状态
-let nodeStatuses = {}; // 当前各节点运行状态
-let lastNodeStatuses = {}; // 上一轮状态快照，用于计算增量
-let nodeEstimates = {}; // 本轮图级派生值，与 nodeStatuses 同步轮转
-let lastNodeEstimates = {}; // 上一轮派生值，用于计算增量
-let statusRev = -1; // 上次拉取的数据版本号，-1 表示首次拉取全量
-let statusesRequestSeq = 0; // 请求序列号，防止旧状态响应覆盖新结果
-let lastStatusTimestamp = 0; // 最近一次状态快照的统一时间戳，供历史曲线记录使用
 // DOM 元素引用
 const dashboardGrid = document.getElementById("dashboard-grid");
 /**
  * 根据当前配置获取节点状态卡应展示的等待任务数。
  * @param {NodeStatus} status - 节点状态快照
- * @param {NodeEstimate} [estimate] - 该节点的图级派生值；结构与分析就绪前可能缺失
+ * @param {NodeEstimate} [estimate] - 该节点的图级派生值；图元信息就绪前可能缺失
  * @returns {number} 当前节点状态卡使用的等待值
  */
 function getDisplayPending(status, estimate) {
@@ -31,7 +24,7 @@ function getDisplayPending(status, estimate) {
  * 总等待模式使用图级估算的 `total_remaining_time`；否则基于本节点自身的计数就地推算，
  * 不依赖任何额外状态。
  * @param {NodeStatus} status - 节点状态快照
- * @param {NodeEstimate} [estimate] - 该节点的图级派生值；结构与分析就绪前可能缺失
+ * @param {NodeEstimate} [estimate] - 该节点的图级派生值；图元信息就绪前可能缺失
  * @returns {number} 当前节点状态卡使用的剩余时间（秒）
  */
 function getDisplayRemainingTime(status, estimate) {
@@ -141,67 +134,6 @@ function renderElapsedDurationHtml(duration, digitClasses, defaultClassName) {
         return `<span class="${className}">${char}</span>`;
     })
         .join("");
-}
-/**
- * 异步加载最新的节点状态数据
- * 从后端 API 获取节点状态并更新全局变量；全局估算与历史曲线同步由 `refreshAll` 收口处理
- * @returns {Promise<boolean>} 当状态版本发生变化并成功更新时返回 `true`，否则返回 `false`。
- */
-async function loadStatuses() {
-    try {
-        const requestSeq = ++statusesRequestSeq; // 为当前状态请求分配递增序号
-        const res = await fetch(`/api/pull_status?known_rev=${statusRev}`);
-        const body = (await res.json());
-        if (requestSeq !== statusesRequestSeq)
-            return false; // 丢弃已过时请求的返回结果
-        if (body.data === null)
-            return false;
-        lastNodeStatuses = nodeStatuses;
-        nodeStatuses = body.data;
-        statusRev = body.rev;
-        lastStatusTimestamp = Number(body.timestamp || 0);
-        return true;
-    }
-    catch (e) {
-        console.error("状态加载失败", e);
-        return false;
-    }
-}
-/**
- * 基于同一快照内的原始计数与静态拓扑，刷新各节点的图级派生值
- *
- * `total_tasks_pending` 与 `total_remaining_time` 需要每个节点的计数与每边输出量，
- * 外加图元信息提供的拓扑与 DAG 判定。图元信息尚未就绪时直接返回，
- * 避免在拓扑缺失时静默算出退化的结果。
- * @returns {void}
- */
-function refreshNodeEstimates() {
-    const analysis = graphMeta.analysis; // 图分析结果随图元信息一次性到达
-    if (!graphMeta.nodes.length || !analysis) {
-        return; // 图元信息尚未就绪
-    }
-    const processedMap = {};
-    const pendingMap = {};
-    const downstreamMap = {};
-    for (const [name, status] of Object.entries(nodeStatuses)) {
-        processedMap[name] = Number(status.tasks_processed || 0);
-        pendingMap[name] = Number(status.tasks_pending || 0);
-        downstreamMap[name] = { ...(status.downstream_counts || {}) };
-    }
-    // 非 DAG 无法拓扑传播，全局待处理量退化为节点自身的待处理量
-    const totalPendingMap = analysis.isDAG
-        ? calcGlobalPending(graphMeta.edges, processedMap, pendingMap, downstreamMap)
-        : { ...pendingMap };
-    const nextEstimates = {};
-    for (const [name, status] of Object.entries(nodeStatuses)) {
-        const totalPending = totalPendingMap[name];
-        nextEstimates[name] = {
-            total_tasks_pending: totalPending,
-            total_remaining_time: calcRemaining(Number(status.tasks_processed || 0), totalPending, Number(status.elapsed_time || 0)),
-        };
-    }
-    lastNodeEstimates = nodeEstimates;
-    nodeEstimates = nextEstimates;
 }
 /**
  * 根据节点状态生成 HTML，显示进度条、统计数据等

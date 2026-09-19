@@ -3,17 +3,6 @@
  * 处理错误记录的异步拉取、前端分页逻辑以及按节点/关键词搜索的过滤展示
  */
 
-/** 单条错误数据定义 */
-type ErrorData = {
-  ts: number; // 生命周期时间戳，单位为秒
-  stage: string; // 错误发生的节点/阶段名称，用于节点筛选
-  event_id: number; // 失败事件的唯一标识 ID，全局唯一
-  error_type: string; // 错误的分类类型，用于区分不同类别的错误
-  error_message: string; // 错误的具体描述信息，是错误的详细文本内容
-  task_json: unknown; // 触发该错误的任务数据，同时用于展示与重试回填
-  result_json: unknown; // 成功结果或失败时的占位结果
-};
-
 type ErrorColumnMeta = {
   labelKey: string; // 列标题对应的国际化 key
   headerClassName?: string; // 表头额外样式类

@@ -2,42 +2,10 @@
 /**
  * 图元信息展示模块
  *
- * 负责图元信息（图拓扑 + 节点构建期元信息 + 图分析结果）的一次性拉取，
- * 并用 Mermaid.js 将任务有向图渲染为流程图，根据节点状态实时着色
+ * 用 Mermaid.js 将任务有向图渲染为流程图，并根据节点状态实时着色；
+ * 图元信息由 loaders.ts 提供，本文件只读不拉。
  */
-// 全局状态
-let graphMeta = {
-    nodes: [],
-    edges: {},
-    source_nodes: [],
-    node_meta: {},
-    analysis: null,
-}; // 图元信息（有向图 + 节点元信息 + 分析结果）
-let graphMetaRev = -1; // 数据版本号，用于增量拉取
-let graphMetaRequestSeq = 0; // 请求序列号，防止旧图元信息响应覆盖新结果
-/**
- * 异步加载最新的图元信息
- * 一次拉取图拓扑、节点构建期元信息与图分析结果，并更新全局变量 graphMeta
- * @returns {Promise<boolean>} 当版本发生变化并成功更新时返回 `true`，否则返回 `false`。
- */
-async function loadGraphMeta() {
-    try {
-        const requestSeq = ++graphMetaRequestSeq; // 为当前请求分配递增序号
-        const res = await fetch(`/api/pull_graph_meta?known_rev=${graphMetaRev}`);
-        const body = (await res.json());
-        if (requestSeq !== graphMetaRequestSeq)
-            return false; // 丢弃已过时请求的返回结果
-        if (body.data === null)
-            return false;
-        graphMeta = body.data;
-        graphMetaRev = body.rev;
-        return true;
-    }
-    catch (e) {
-        console.error("图元信息加载失败", e);
-        return false;
-    }
-}
+/** Mermaid 节点形状，取值由 `getNodeShape` 决定 */
 /**
  * 获取节点的唯一标识符 ID
  * @param {string} nodeName - 节点名称。
