@@ -13,9 +13,6 @@ type NodeStatus = {
   tasks_duplicated: number; // 被去重过滤的任务数
   upstream_counts: Record<string, number>; // 各上游节点传输给本节点的任务数量
   downstream_counts: Record<string, number>; // 本节点传输给各下游节点的任务数量
-  execution_mode: string; // 运行模式（serial/thread/async）
-  max_workers: number; // 最大并发数
-  class_name: string; // 节点类名（TaskStage/TaskSplitter/TaskRouter）
   start_time: number; // 启动 Unix 时间戳
   elapsed_time: number; // 已运行秒数
 };
@@ -253,13 +250,14 @@ async function loadStatuses(): Promise<boolean> {
  * 基于同一快照内的原始计数与静态拓扑，刷新各节点的图级派生值
  *
  * `total_tasks_pending` 与 `total_remaining_time` 需要每个节点的计数与每边输出量，
- * 外加结构提供的拓扑与拓扑分析提供的 DAG 判定。结构或分析尚未就绪时直接返回，
+ * 外加图元信息提供的拓扑与 DAG 判定。图元信息尚未就绪时直接返回，
  * 避免在拓扑缺失时静默算出退化的结果。
  * @returns {void}
  */
 function refreshNodeEstimates(): void {
-  if (!structureData.nodes.length || !analysisData) {
-    return; // 结构或分析数据尚未就绪
+  const analysis = graphMeta.analysis; // 图分析结果随图元信息一次性到达
+  if (!graphMeta.nodes.length || !analysis) {
+    return; // 图元信息尚未就绪
   }
 
   const processedMap: CountMap = {};
@@ -272,9 +270,9 @@ function refreshNodeEstimates(): void {
   }
 
   // 非 DAG 无法拓扑传播，全局待处理量退化为节点自身的待处理量
-  const totalPendingMap: CountMap = analysisData.isDAG
+  const totalPendingMap: CountMap = analysis.isDAG
     ? calcGlobalPending(
-        structureData.edges,
+        graphMeta.edges,
         processedMap,
         pendingMap,
         downstreamMap,
@@ -323,9 +321,11 @@ function renderDashboard(): void {
     const addFailed = data.tasks_failed - (last.tasks_failed || 0); // 失败数增量
     const addDuplicated = data.tasks_duplicated - (last.tasks_duplicated || 0); // 重复数增量
 
-    // 并行数量：serial 串行模式无并发概念，显示 "-"
+    const meta = graphMeta.node_meta[node]; // 构建期元信息随图元信息一次性拉取
+
+    // 并行数量：serial 串行模式无并发概念，显示 "-"；元信息缺失时同样显示 "-"
     const parallelismText =
-      data.execution_mode === "serial" ? "-" : String(data.max_workers);
+      !meta || meta.execution_mode === "serial" ? "-" : String(meta.max_workers);
 
     // 计算进度
     const total = data.tasks_processed + displayPending; // 已处理 + 待处理构成总量
@@ -376,7 +376,7 @@ function renderDashboard(): void {
               "text-delta-duplicate",
               "text-delta-duplicate",
             )}</div></div>
-            <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(data.execution_mode)}</div></div>
+            <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(meta?.execution_mode ?? "-")}</div></div>
             <div><div class="stat-label">${renderLabelWithTooltip("status.parallelism", "status.parallelismHelp")}</div><div class="stat-value">${escapeHtml(parallelismText)}</div></div>
           </div>
           <div class="text-sm text-carbon">${t("status.startTime")}${formatTimestamp(data.start_time)}</div>

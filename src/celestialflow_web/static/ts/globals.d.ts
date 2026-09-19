@@ -26,9 +26,7 @@ type StatusPullResponse = ApiVersionedResponse<Record<string, NodeStatus>> & {
   timestamp: number; // 本次状态快照的统一时间戳
 };
 
-type StructurePullResponse = ApiVersionedResponse<StructureGraph>; // 结构图拉取响应
-
-type AnalysisPullResponse = ApiVersionedResponse<AnalysisData>; // 分析信息拉取响应
+type GraphMetaPullResponse = ApiVersionedResponse<GraphMeta>; // 图元信息拉取响应
 
 type ErrorsPullResponse = {
   rev: number; // 错误数据版本号

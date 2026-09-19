@@ -1,13 +1,29 @@
 # tests/test_server.py
+def _push_graph_meta(client, graph_id: str):
+    """推送一份最小图元信息，用于建立 graph 上下文；返回响应供调用方断言状态码。"""
+    return client.post(
+        "/api/push_graph_meta",
+        json={
+            "graph_id": graph_id,
+            "nodes": ["s1"],
+            "edges": {"s1": []},
+            "source_nodes": ["s1"],
+            "node_meta": {"s1": {"class_name": "TaskExecutor", "max_workers": 1}},
+            "analysis": {"graphId": graph_id, "isDAG": True},
+        },
+    )
+
+
 def test_store_snapshot_methods_return_isolated_copies(web_server):
     """测试 server 快照接口：返回值不应与内部 store 共享可变引用"""
     raw_status = {"s1": {"tasks_succeeded": 1, "total_remaining_time": 2.0}}
-    raw_structure = {
+    raw_graph_meta = {
         "nodes": ["s1"],
         "edges": {"s1": []},
         "source_nodes": ["s1"],
+        "node_meta": {"s1": {"class_name": "TaskExecutor", "max_workers": 1}},
+        "analysis": {"isDAG": True},
     }
-    raw_analysis = {"isDAG": True}
     raw_errors = [
         {
             "event_id": 1,
@@ -18,34 +34,34 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
     ]
 
     web_server.update_status_store(123.0, raw_status)
-    web_server.update_structure_store(raw_structure)
-    web_server.update_analysis_store(raw_analysis)
+    web_server.update_graph_meta_store(raw_graph_meta)
     web_server.update_errors_store(raw_errors)
 
     _, status_timestamp, status_snapshot = web_server.get_status_snapshot()
-    _, structure_snapshot = web_server.get_structure_snapshot()
-    _, analysis_snapshot = web_server.get_analysis_snapshot()
+    _, graph_meta_snapshot = web_server.get_graph_meta_snapshot()
     _, errors_snapshot = web_server.get_errors_snapshot()
 
     raw_status["s1"]["tasks_succeeded"] = 99
-    raw_structure["nodes"].append("s2")
-    raw_analysis["isDAG"] = False
+    raw_graph_meta["nodes"].append("s2")
+    raw_graph_meta["node_meta"]["s1"]["max_workers"] = 99
+    raw_graph_meta["analysis"]["isDAG"] = False
     raw_errors[0]["stage"] = "mutated"
     status_snapshot["s1"]["tasks_succeeded"] = 88
-    structure_snapshot["nodes"].append("s2")
-    analysis_snapshot["isDAG"] = False
+    graph_meta_snapshot["nodes"].append("s2")
+    graph_meta_snapshot["node_meta"]["s1"]["max_workers"] = 77
+    graph_meta_snapshot["analysis"]["isDAG"] = False
     errors_snapshot[0]["stage"] = "snapshot-mutated"
 
     _, status_timestamp_after, status_snapshot_after = web_server.get_status_snapshot()
-    _, structure_snapshot_after = web_server.get_structure_snapshot()
-    _, analysis_snapshot_after = web_server.get_analysis_snapshot()
+    _, graph_meta_snapshot_after = web_server.get_graph_meta_snapshot()
     _, errors_snapshot_after = web_server.get_errors_snapshot()
 
     assert status_timestamp == 123.0
     assert status_timestamp_after == 123.0
     assert status_snapshot_after["s1"]["tasks_succeeded"] == 1
-    assert structure_snapshot_after["nodes"] == ["s1"]
-    assert analysis_snapshot_after["isDAG"] is True
+    assert graph_meta_snapshot_after["nodes"] == ["s1"]
+    assert graph_meta_snapshot_after["node_meta"]["s1"]["max_workers"] == 1
+    assert graph_meta_snapshot_after["analysis"]["isDAG"] is True
     assert errors_snapshot_after[0]["stage"] == "s1"
 
 
@@ -169,8 +185,7 @@ def test_server_state_api(client):
     data = response.json()
     assert data["interval"] > 0
     assert data["is_current_graph"] is True
-    assert data["has_structure"] is False
-    assert data["has_analysis"] is False
+    assert data["has_graph_meta"] is False
     assert data["max_event_id_in_fail"] is None
 
 
@@ -226,6 +241,49 @@ def test_status_push_pull(client):
     current_rev = pull_data["rev"]
     pull_resp_cached = client.get(f"/api/pull_status?known_rev={current_rev}")
     assert pull_resp_cached.json()["data"] is None
+
+
+def test_graph_meta_push_pull(client):
+    """测试图元信息同步链路：结构、节点元信息与分析结果应经 push/pull 完整保留"""
+    graph_id = "demo@1000"
+    client.get(f"/api/pull_server_state?graph_id={graph_id}")
+
+    test_graph_meta = {
+        "graph_id": graph_id,
+        "nodes": ["s1", "s2"],
+        "edges": {"s1": ["s2"], "s2": []},
+        "source_nodes": ["s1"],
+        "node_meta": {
+            "s1": {
+                "class_name": "TaskExecutor",
+                "execution_mode": "thread",
+                "max_workers": 4,
+            },
+            "s2": {
+                "class_name": "TaskExecutor",
+                "execution_mode": "serial",
+                "max_workers": 1,
+            },
+        },
+        "analysis": {"graphId": graph_id, "isDAG": True, "layersDict": {"0": ["s1"]}},
+    }
+    push_resp = client.post("/api/push_graph_meta", json=test_graph_meta)
+    assert push_resp.status_code == 200
+    assert push_resp.json() == {"ok": True}
+
+    pull_data = client.get("/api/pull_graph_meta?known_rev=-1").json()
+    assert pull_data["rev"] > 0
+    assert pull_data["data"] == {
+        "nodes": test_graph_meta["nodes"],
+        "edges": test_graph_meta["edges"],
+        "source_nodes": test_graph_meta["source_nodes"],
+        "node_meta": test_graph_meta["node_meta"],
+        "analysis": test_graph_meta["analysis"],
+    }
+
+    # 版本未变时不应重复下发
+    pull_cached = client.get(f"/api/pull_graph_meta?known_rev={pull_data['rev']}")
+    assert pull_cached.json()["data"] is None
 
 def test_task_injection(client):
     """测试任务与终止符注入流程：验证服务端原子返回并在 pull 后清空。"""
@@ -471,13 +529,7 @@ def test_push_errors_appends_for_same_graph(client):
     state = client.get(f"/api/pull_server_state?graph_id={graph_id}").json()
     assert state["is_current_graph"] is False
 
-    analysis_resp = client.post(
-        "/api/push_analysis",
-        json={
-            "graph_id": graph_id,
-            "analysis": {"graphId": graph_id, "name": "demo", "startTime": 2.0},
-        },
-    )
+    analysis_resp = _push_graph_meta(client, graph_id)
     assert analysis_resp.status_code == 200
     assert analysis_resp.json() == {"ok": True}
 
@@ -494,7 +546,7 @@ def test_push_errors_appends_for_same_graph(client):
     state = client.get(f"/api/pull_server_state?graph_id={graph_id}").json()
     assert state["is_current_graph"] is True
     assert state["max_event_id_in_fail"] == 2
-    assert state["has_analysis"] is True
+    assert state["has_graph_meta"] is True
 
     response = client.post(
         "/api/push_errors",
@@ -527,13 +579,7 @@ def test_push_errors_duplicate_append_is_idempotent(client):
     ]
 
     client.get(f"/api/pull_server_state?graph_id={graph_id}")
-    client.post(
-        "/api/push_analysis",
-        json={
-            "graph_id": graph_id,
-            "analysis": {"graphId": graph_id, "name": "demo", "startTime": 3.0},
-        },
-    )
+    assert _push_graph_meta(client, graph_id).status_code == 200
 
     first = client.post(
         "/api/push_errors",
@@ -566,13 +612,7 @@ def test_newer_graph_replaces_previous_graph_context(client):
     state = client.get(f"/api/pull_server_state?graph_id={old_graph_id}").json()
     assert state["is_current_graph"] is False
 
-    client.post(
-        "/api/push_analysis",
-        json={
-            "graph_id": old_graph_id,
-            "analysis": {"graphId": old_graph_id, "name": "demo", "startTime": 1.0},
-        },
-    )
+    assert _push_graph_meta(client, old_graph_id).status_code == 200
     client.post(
         "/api/push_errors",
         json={
@@ -598,8 +638,8 @@ def test_newer_graph_replaces_previous_graph_context(client):
     pulled = client.get("/api/pull_errors?page=1&page_size=10").json()
     assert pulled["total"] == 0
 
-    analysis = client.get("/api/pull_analysis?known_rev=-1").json()
-    assert analysis["data"] is None
+    graph_meta = client.get("/api/pull_graph_meta?known_rev=-1").json()
+    assert graph_meta["data"]["nodes"] == []
 
 
 def test_stale_graph_pushes_are_ignored(client):
@@ -608,23 +648,11 @@ def test_stale_graph_pushes_are_ignored(client):
     new_graph_id = "demo@2000"
 
     client.get(f"/api/pull_server_state?graph_id={old_graph_id}")
-    client.post(
-        "/api/push_analysis",
-        json={
-            "graph_id": old_graph_id,
-            "analysis": {"graphId": old_graph_id, "name": "demo", "startTime": 1.0},
-        },
-    )
+    assert _push_graph_meta(client, old_graph_id).status_code == 200
 
     client.get(f"/api/pull_server_state?graph_id={new_graph_id}")
 
-    stale_analysis = client.post(
-        "/api/push_analysis",
-        json={
-            "graph_id": old_graph_id,
-            "analysis": {"graphId": old_graph_id, "name": "old", "startTime": 1.0},
-        },
-    )
+    stale_analysis = _push_graph_meta(client, old_graph_id)
     assert stale_analysis.status_code == 409
     assert stale_analysis.json() == {"ok": False, "error": "stale graph_id"}
 
@@ -650,5 +678,5 @@ def test_stale_graph_pushes_are_ignored(client):
 
     state = client.get(f"/api/pull_server_state?graph_id={new_graph_id}").json()
     assert state["is_current_graph"] is True
-    assert state["has_analysis"] is False
+    assert state["has_graph_meta"] is False
     assert state["max_event_id_in_fail"] is None

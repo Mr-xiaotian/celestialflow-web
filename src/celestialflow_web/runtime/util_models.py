@@ -6,13 +6,15 @@ from typing import Any
 from pydantic import BaseModel, Field, RootModel
 
 
-class StructureModel(BaseModel):
-    """任务结构数据模型"""
+class GraphMetaModel(BaseModel):
+    """图元信息数据模型：图结构、节点构建期元信息与图分析结果"""
 
     graph_id: str = ""
     nodes: list[str] = Field(default_factory=list)
     edges: dict[str, list[str]] = Field(default_factory=dict)
     source_nodes: list[str] = Field(default_factory=list)
+    node_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    analysis: dict[str, Any] | None = None
 
 
 class StatusModel(BaseModel):
@@ -28,13 +30,6 @@ class ErrorsModel(BaseModel):
 
     graph_id: str = ""
     errors: list[dict[str, Any]]
-
-
-class AnalysisModel(BaseModel):
-    """任务分析数据模型"""
-
-    graph_id: str = ""
-    analysis: dict[str, Any]
 
 
 class TaskInjectionModel(RootModel[dict[str, list[Any]]]):

@@ -63,15 +63,16 @@ class TaskWebServer:
 
         self.templates: Jinja2Templates = Jinja2Templates(directory=templates_path)
 
-        # 用于存储状态、结构、错误信息
+        # 用于存储状态、图元信息、错误信息
         self.status_store: dict[str, dict[str, Any]] = {}
         self.status_timestamp: float = 0.0
-        self.structure_store: dict[str, Any] = {
+        self.graph_meta_store: dict[str, Any] = {
             "nodes": [],
             "edges": {},
             "source_nodes": [],
+            "node_meta": {},
+            "analysis": None,
         }
-        self.analysis_store: dict[str, Any] = {}
         self.injection_tasks: dict[str, list[Any]] = {}  # 存储前端注入任务
         self.injection_terminations: set[str] = set()  # 存储前端注入终止符
         self.current_graph_id: str = ""
@@ -87,9 +88,8 @@ class TaskWebServer:
 
         # 各类 store 的 rev + payload 需要原子读写，避免 pull 读到撕裂快照
         self.status_lock: threading.Lock = threading.Lock()
-        self.structure_lock: threading.Lock = threading.Lock()
+        self.graph_meta_lock: threading.Lock = threading.Lock()
         self.errors_lock: threading.Lock = threading.Lock()
-        self.analysis_lock: threading.Lock = threading.Lock()
         self.graph_context_lock: threading.Lock = threading.Lock()
 
         # 用于存储任务注入锁
@@ -98,9 +98,8 @@ class TaskWebServer:
         # 每次 push 时递增，pull 时对比，无变化则返回 null data
         self.store_revs: dict[str, int] = {
             "status": 0,
-            "structure": 0,
+            "graph_meta": 0,
             "errors": 0,
-            "analysis": 0,
         }
 
         # 加载配置
@@ -121,7 +120,7 @@ class TaskWebServer:
         """
         清空与当前 graph 运行实例绑定的缓存。
 
-        该方法会同时重置状态、结构、分析与错误缓存，并递增对应的
+        该方法会同时重置状态、图元信息与错误缓存，并递增对应的
         store 版本号，使前端在下一轮 pull 时感知到 graph 已切换。
 
         :return: None
@@ -130,16 +129,15 @@ class TaskWebServer:
             self.status_store = {}
             self.status_timestamp = 0.0
             self.store_revs["status"] += 1
-        with self.structure_lock:
-            self.structure_store = {
+        with self.graph_meta_lock:
+            self.graph_meta_store = {
                 "nodes": [],
                 "edges": {},
                 "source_nodes": [],
+                "node_meta": {},
+                "analysis": None,
             }
-            self.store_revs["structure"] += 1
-        with self.analysis_lock:
-            self.analysis_store = {}
-            self.store_revs["analysis"] += 1
+            self.store_revs["graph_meta"] += 1
         with self.errors_lock:
             clear_records(self.records_db_path)
             self.store_revs["errors"] += 1
@@ -178,16 +176,16 @@ class TaskWebServer:
             return bool(self.current_graph_id) and self.current_graph_id == graph_id
 
     # ==== Store Writes ====
-    def update_structure_store(self, structure: dict[str, Any]) -> None:
+    def update_graph_meta_store(self, graph_meta: dict[str, Any]) -> None:
         """
-        原子更新结构缓存及其版本号。
+        原子更新图元信息缓存（结构 + 节点元信息 + 分析）及其版本号。
 
-        :param structure: 最新任务图结构数据
+        :param graph_meta: 最新图元信息数据
         :return: None
         """
-        with self.structure_lock:
-            self.structure_store = copy.deepcopy(structure)
-            self.store_revs["structure"] += 1
+        with self.graph_meta_lock:
+            self.graph_meta_store = copy.deepcopy(graph_meta)
+            self.store_revs["graph_meta"] += 1
 
     def update_status_store(
         self, timestamp: float, status: dict[str, dict[str, Any]]
@@ -218,27 +216,16 @@ class TaskWebServer:
             _ = append_records(self.records_db_path, errors)
             self.store_revs["errors"] += 1
 
-    def update_analysis_store(self, analysis: dict[str, Any]) -> None:
-        """
-        原子更新图分析缓存及其版本号。
-
-        :param analysis: 最新图分析数据
-        :return: None
-        """
-        with self.analysis_lock:
-            self.analysis_store = copy.deepcopy(analysis)
-            self.store_revs["analysis"] += 1
-
     # ==== Store Reads ====
-    def get_structure_snapshot(self) -> tuple[int, dict[str, Any]]:
+    def get_graph_meta_snapshot(self) -> tuple[int, dict[str, Any]]:
         """
-        原子读取结构缓存快照。
+        原子读取图元信息缓存快照。
 
-        :return: ``(rev, structure_store)``
+        :return: ``(rev, graph_meta_store)``
         :rtype: tuple[int, dict[str, Any]]
         """
-        with self.structure_lock:
-            return self.store_revs["structure"], copy.deepcopy(self.structure_store)
+        with self.graph_meta_lock:
+            return self.store_revs["graph_meta"], copy.deepcopy(self.graph_meta_store)
 
     def get_config(self) -> dict[str, Any]:
         """
@@ -279,26 +266,19 @@ class TaskWebServer:
         同步 graph 上下文并返回 reporter 同步决策所需的服务端状态。
 
         该方法会先调用 ``sync_graph_context`` 切换 graph 上下文（有副作用），
-        再返回当前 graph 对应的结构、分析和错误缓存摘要。
+        再返回当前 graph 对应的图元信息与错误缓存摘要。
 
         :param graph_id: reporter 当前任务图实例的唯一标识
         :return: 服务端同步状态摘要字典
         :rtype: dict[str, Any]
         """
         is_current_graph = self.sync_graph_context(graph_id)
-        with self.structure_lock:
-            has_structure = bool(
-                self.structure_store["nodes"]
-                or self.structure_store["edges"]
-                or self.structure_store["source_nodes"]
-            )
-        with self.analysis_lock:
-            has_analysis = bool(self.analysis_store)
+        with self.graph_meta_lock:
+            has_graph_meta = bool(self.graph_meta_store["nodes"])
         return {
             "interval": self.report_interval,
             "is_current_graph": is_current_graph,
-            "has_structure": has_structure,
-            "has_analysis": has_analysis,
+            "has_graph_meta": has_graph_meta,
             "max_event_id_in_fail": self.get_max_event_id_in_fail(),
         }
 
@@ -364,20 +344,6 @@ class TaskWebServer:
         """
         with self.errors_lock:
             return get_max_event_id_in_fail(self.records_db_path)
-
-    def get_analysis_snapshot(self) -> tuple[int, dict[str, Any] | None]:
-        """
-        原子读取图分析缓存快照。
-
-        当当前 graph 尚未产生分析数据时，返回 ``None``，供前端明确进入空态。
-
-        :return: ``(rev, analysis_store_or_none)``
-        :rtype: tuple[int, dict[str, Any] | None]
-        """
-        with self.analysis_lock:
-            if not self.analysis_store:
-                return self.store_revs["analysis"], None
-            return self.store_revs["analysis"], copy.deepcopy(self.analysis_store)
 
     # ==== Application Lifecycle ====
     def _setup_routes(self) -> None:

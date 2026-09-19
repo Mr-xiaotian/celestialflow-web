@@ -1,40 +1,59 @@
 /**
- * 任务图结构展示模块
- * 使用 Mermaid.js 将复杂的任务有向图转换为可视化的流程图，并根据节点状态实时着色
+ * 图元信息展示模块
+ *
+ * 负责图元信息（图拓扑 + 节点构建期元信息 + 图分析结果）的一次性拉取，
+ * 并用 Mermaid.js 将任务有向图渲染为流程图，根据节点状态实时着色
  */
 
 // 全局状态
-let structureData: StructureGraph = {
+let graphMeta: GraphMeta = {
   nodes: [],
   edges: {},
   source_nodes: [],
-}; // 任务结构图数据（有向图）
-let structureRev = -1; // 数据版本号，用于增量拉取
-let structureRequestSeq = 0; // 请求序列号，防止旧结构响应覆盖新结果
+  node_meta: {},
+  analysis: null,
+}; // 图元信息（有向图 + 节点元信息 + 分析结果）
+let graphMetaRev = -1; // 数据版本号，用于增量拉取
+let graphMetaRequestSeq = 0; // 请求序列号，防止旧图元信息响应覆盖新结果
 
-type StructureGraph = {
-  nodes: string[]; // 全量节点名列表
-  edges: Record<string, string[]>; // 有向边邻接表
-  source_nodes: string[]; // 入度为 0 的源节点列表
+/** 节点的构建期元信息，不进每轮状态快照 */
+type NodeMeta = {
+  class_name: string; // 节点类名（TaskStage/TaskSplitter/TaskRouter）
+  execution_mode: string; // 运行模式（serial/thread/async）
+  max_workers: number; // 最大并发数
 };
 
 /**
- * 异步加载最新的任务结构数据
- * 从后端 API 获取任务结构图数据并更新全局变量 structureData
- * @returns {Promise<boolean>} 当结构版本发生变化并成功更新时返回 `true`，否则返回 `false`。
+ * 图元信息：图拓扑、各节点构建期元信息与图分析结果
+ *
+ * 三者由 reporter 在同一次 push 中原子写入，因此 `nodes` 非空即表示
+ * 拓扑、`node_meta` 与 `analysis` 均已就绪。
  */
-async function loadStructure(): Promise<boolean> {
+type GraphMeta = {
+  nodes: string[]; // 全量节点名列表
+  edges: Record<string, string[]>; // 有向边邻接表
+  source_nodes: string[]; // 入度为 0 的源节点列表
+  node_meta: Record<string, NodeMeta>; // 各节点的构建期元信息
+  analysis: AnalysisData | null; // 图分析结果；reporter 尚未推送时为 null
+};
+
+/**
+ * 异步加载最新的图元信息
+ * 一次拉取图拓扑、节点构建期元信息与图分析结果，并更新全局变量 graphMeta
+ * @returns {Promise<boolean>} 当版本发生变化并成功更新时返回 `true`，否则返回 `false`。
+ */
+async function loadGraphMeta(): Promise<boolean> {
   try {
-    const requestSeq = ++structureRequestSeq; // 为当前结构请求分配递增序号
-    const res = await fetch(`/api/pull_structure?known_rev=${structureRev}`);
-    const body = (await res.json()) as StructurePullResponse;
-    if (requestSeq !== structureRequestSeq) return false; // 丢弃已过时请求的返回结果
+    const requestSeq = ++graphMetaRequestSeq; // 为当前请求分配递增序号
+    const res = await fetch(`/api/pull_graph_meta?known_rev=${graphMetaRev}`);
+    const body = (await res.json()) as GraphMetaPullResponse;
+    if (requestSeq !== graphMetaRequestSeq) return false; // 丢弃已过时请求的返回结果
     if (body.data === null) return false;
-    structureData = body.data;
-    structureRev = body.rev;
+    graphMeta = body.data;
+    graphMetaRev = body.rev;
     return true;
   } catch (e) {
-    console.error("结构加载失败", e);
+    console.error("图元信息加载失败", e);
     return false;
   }
 }
@@ -53,8 +72,8 @@ type NodeShape = "box" | "rhombus" | "subgraph";
 
 /**
  * 根据节点类名推导 Mermaid 形状类型
- * 类名来自运行时状态快照（snapshot 的 class_name）；结构数据不再携带执行层信息。
- * @param {string} [className] - 节点类名（如 TaskSplitter / TaskRouter），节点未运行时为空
+ * 类名来自图元信息中的 `node_meta.class_name`，与每轮状态快照解耦。
+ * @param {string} [className] - 节点类名（如 TaskSplitter / TaskRouter），缺失时按普通节点处理
  * @returns {NodeShape} Mermaid 形状名称
  */
 function getNodeShape(className?: string): NodeShape {
@@ -88,13 +107,13 @@ function getShapeWrappedLabel(label: string, shape: NodeShape): string {
 }
 
 /**
- * 根据任务结构数据渲染 Mermaid 图表
+ * 根据图元信息渲染 Mermaid 图表
  * 构建 Mermaid 流程图代码，根据节点状态应用样式，并更新 DOM
  * @param {Record<string, NodeStatus>} [statuses={}] - 当前节点状态映射，用于节点着色和边增量计算。
  * @returns {void}
  */
 function renderMermaidStructure(statuses: Record<string, NodeStatus> = {}): void {
-  const { nodes, edges, source_nodes } = structureData; // 当前结构图主数据
+  const { nodes, edges, source_nodes, node_meta } = graphMeta; // 当前图元信息主数据
   const nodeNames = nodes; // 全量节点名，供空状态判断和遍历使用
 
   if (!nodeNames.length) {
@@ -140,10 +159,10 @@ linkStyle default stroke:#999,stroke-width:1.5px;
   // 先生成节点定义和节点样式，再生成边，便于后续统一拼接 Mermaid 代码。
   for (const nodeName of orderedNodeNames) {
     const id = getNodeId(nodeName);
-    const statusInfo = statuses[nodeName]; // 当前节点的运行态，用于上色和形状推导
+    const statusInfo = statuses[nodeName]; // 当前节点的运行态，用于上色
     nodeLabels.set(
       id,
-      getShapeWrappedLabel(nodeName, getNodeShape(statusInfo?.class_name)),
+      getShapeWrappedLabel(nodeName, getNodeShape(node_meta[nodeName]?.class_name)),
     );
 
     let statusClass = "whiteNode"; // 默认样式为普通白色节点

@@ -24,7 +24,7 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
         """返回 reporter 同步决策所需的服务端状态。
 
         :param graph_id: reporter 当前任务图实例的唯一标识
-        :return: {"interval": float, "is_current_graph": bool, "has_structure": bool, "has_analysis": bool, "max_event_id_in_fail": int | None}
+        :return: {"interval": float, "is_current_graph": bool, "has_graph_meta": bool, "max_event_id_in_fail": int | None}
         """
         return server.get_server_state(graph_id)
 
@@ -62,18 +62,18 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
             "data": status_store,
         }
 
-    @router.get("/api/pull_structure")
-    def pull_structure(known_rev: int = -1) -> dict[str, Any]:
+    @router.get("/api/pull_graph_meta")
+    def pull_graph_meta(known_rev: int = -1) -> dict[str, Any]:
         """
-        返回图结构数据；若版本未变则返回 data=null。
+        返回图元信息（结构 + 节点元信息 + 分析）；若版本未变则返回 data=null。
 
         :param known_rev: 客户端已知的版本号
-        :return: {"rev": int, "data": list | None}
+        :return: {"rev": int, "data": dict | None}
         """
-        rev, structure_store = server.get_structure_snapshot()
+        rev, graph_meta_store = server.get_graph_meta_snapshot()
         if known_rev == rev:
             return {"rev": rev, "data": None}
-        return {"rev": rev, "data": structure_store}
+        return {"rev": rev, "data": graph_meta_store}
 
     @router.get("/api/pull_errors")
     def pull_errors(
@@ -121,17 +121,6 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
         if known_rev == rev:
             return {**base, "data": None}
         return {**base, "data": page_items}
-
-    @router.get("/api/pull_analysis")
-    def pull_analysis(known_rev: int = -1) -> dict[str, Any]:
-        """
-        返回图拓扑信息。
-
-        :param known_rev: 客户端已知的版本号
-        :return: {"rev": int, "data": dict | None}
-        """
-        rev, analysis_store = server.get_analysis_snapshot()
-        return {"rev": rev, "data": analysis_store}
 
     @router.get("/api/pull_error_type_counts")
     def pull_error_type_counts(known_rev: int = -1, node: str = "") -> dict[str, Any]:

@@ -171,13 +171,14 @@ async function loadStatuses() {
  * 基于同一快照内的原始计数与静态拓扑，刷新各节点的图级派生值
  *
  * `total_tasks_pending` 与 `total_remaining_time` 需要每个节点的计数与每边输出量，
- * 外加结构提供的拓扑与拓扑分析提供的 DAG 判定。结构或分析尚未就绪时直接返回，
+ * 外加图元信息提供的拓扑与 DAG 判定。图元信息尚未就绪时直接返回，
  * 避免在拓扑缺失时静默算出退化的结果。
  * @returns {void}
  */
 function refreshNodeEstimates() {
-    if (!structureData.nodes.length || !analysisData) {
-        return; // 结构或分析数据尚未就绪
+    const analysis = graphMeta.analysis; // 图分析结果随图元信息一次性到达
+    if (!graphMeta.nodes.length || !analysis) {
+        return; // 图元信息尚未就绪
     }
     const processedMap = {};
     const pendingMap = {};
@@ -188,8 +189,8 @@ function refreshNodeEstimates() {
         downstreamMap[name] = { ...(status.downstream_counts || {}) };
     }
     // 非 DAG 无法拓扑传播，全局待处理量退化为节点自身的待处理量
-    const totalPendingMap = analysisData.isDAG
-        ? calcGlobalPending(structureData.edges, processedMap, pendingMap, downstreamMap)
+    const totalPendingMap = analysis.isDAG
+        ? calcGlobalPending(graphMeta.edges, processedMap, pendingMap, downstreamMap)
         : { ...pendingMap };
     const nextEstimates = {};
     for (const [name, status] of Object.entries(nodeStatuses)) {
@@ -224,8 +225,9 @@ function renderDashboard() {
         const addPending = displayPending - lastDisplayPending; // 等待数增量
         const addFailed = data.tasks_failed - (last.tasks_failed || 0); // 失败数增量
         const addDuplicated = data.tasks_duplicated - (last.tasks_duplicated || 0); // 重复数增量
-        // 并行数量：serial 串行模式无并发概念，显示 "-"
-        const parallelismText = data.execution_mode === "serial" ? "-" : String(data.max_workers);
+        const meta = graphMeta.node_meta[node]; // 构建期元信息随图元信息一次性拉取
+        // 并行数量：serial 串行模式无并发概念，显示 "-"；元信息缺失时同样显示 "-"
+        const parallelismText = !meta || meta.execution_mode === "serial" ? "-" : String(meta.max_workers);
         // 计算进度
         const total = data.tasks_processed + displayPending; // 已处理 + 待处理构成总量
         const progressRatio = total === 0 ? 0 : Math.floor((data.tasks_processed / total) * 100);
@@ -253,7 +255,7 @@ function renderDashboard() {
             <div><div class="stat-label">${getPendingLabelHtml()}</div><div class="stat-value text-pending">${formatWithDelta(displayPending, addPending, "text-delta-pending", "text-delta-pending")}</div></div>
             <div><div class="stat-label">${t("status.error")}</div><div class="stat-value text-error error-clickable" data-node="${escapeHtml(node)}">${formatWithDelta(data.tasks_failed, addFailed, "text-delta-error", "text-delta-error")}</div></div>
             <div><div class="stat-label">${t("status.duplicated")}</div><div class="stat-value text-duplicate">${formatWithDelta(data.tasks_duplicated, addDuplicated, "text-delta-duplicate", "text-delta-duplicate")}</div></div>
-            <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(data.execution_mode)}</div></div>
+            <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(meta?.execution_mode ?? "-")}</div></div>
             <div><div class="stat-label">${renderLabelWithTooltip("status.parallelism", "status.parallelismHelp")}</div><div class="stat-value">${escapeHtml(parallelismText)}</div></div>
           </div>
           <div class="text-sm text-carbon">${t("status.startTime")}${formatTimestamp(data.start_time)}</div>

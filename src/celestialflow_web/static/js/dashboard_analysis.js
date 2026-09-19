@@ -1,50 +1,23 @@
 "use strict";
 /**
- * 拓扑分析模块
- * 负责拉取和展示图结构的拓扑分析结果（如是否为 DAG、图模式等）
+ * 拓扑分析展示模块
+ * 负责展示图元信息中的拓扑分析结果（如是否为 DAG、图模式等）
  */
-// 全局状态
-let analysisData = null; // 拓扑分析数据；未加载时为 null
-let analysisRev = -1; // 数据版本号，用于增量拉取
-let analysisRequestSeq = 0; // 请求序列号，防止旧分析响应覆盖新结果
-/**
- * 异步加载最新的分析数据
- * 从后端 API 获取分析信息并更新全局变量 analysisData
- * @returns {Promise<boolean>} 当分析数据版本发生变化并成功更新时返回 `true`，否则返回 `false`。
- */
-async function loadAnalysis() {
-    try {
-        const requestSeq = ++analysisRequestSeq; // 为当前分析请求分配递增序号
-        const res = await fetch(`/api/pull_analysis?known_rev=${analysisRev}`);
-        const body = (await res.json());
-        if (requestSeq !== analysisRequestSeq)
-            return false; // 丢弃已过时请求的返回结果
-        const nextRev = Number(body.rev);
-        const previousAnalysisData = analysisData;
-        analysisData = body.data;
-        const changed = analysisRev !== nextRev || previousAnalysisData !== analysisData;
-        analysisRev = nextRev;
-        return changed;
-    }
-    catch (e) {
-        console.error("分析数据加载失败", e);
-        return false;
-    }
-}
 /**
  * 渲染分析信息面板
- * 根据 analysisData 在页面上显示结构类型、DAG 状态、图模式和层级数量等信息
+ * 根据 graphMeta.analysis 在页面上显示结构类型、DAG 状态、图模式和层级数量等信息
  * @returns {void}
  */
 function renderAnalysisInfo() {
     const container = document.getElementById("analysis-info"); // 分析卡片内容容器
     if (!container)
         return;
-    if (!analysisData) {
+    const analysis = graphMeta.analysis; // 分析结果随图元信息一次性到达
+    if (!analysis) {
         container.innerHTML = `<div class="empty-placeholder">${t("analysis.noData")}</div>`;
         return;
     }
-    const { name, startTime, isDAG, graphMode, className, layersDict } = analysisData; // 解构常用分析字段
+    const { name, startTime, isDAG, graphMode, className, layersDict } = analysis; // 解构常用分析字段
     const layerCount = Object.keys(layersDict).length; // 通过层级字典键数推导层级总数
     const startTimeText = startTime > 0 ? formatTimestamp(startTime) : "-";
     // 统一构建分析信息内容，避免分散更新不同 DOM 节点。

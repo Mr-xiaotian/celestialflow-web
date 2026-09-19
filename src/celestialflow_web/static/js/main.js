@@ -314,31 +314,30 @@ function rerenderAllViews() {
  * @returns {Promise<void>}
  */
 async function refreshAll() {
-    // 并行获取节点状态、任务结构、错误日志（注意是异步 API 请求）
+    // 并行获取节点状态、图元信息、错误日志（注意是异步 API 请求）
     // - nodeStatuses 会被 loadStatuses 更新
-    // - 结构数据会被 loadStructure 使用来渲染 Mermaid 图
+    // - graphMeta 会被 loadGraphMeta 更新
     // - errors 会被 loadErrors 刷新为当前筛选结果并用于错误列表渲染
-    let [statusesChanged, structureChanged, errorsChanged, analysisChanged, errorTypeCountsChanged] = await Promise.all([
+    let [statusesChanged, graphMetaChanged, errorsChanged, errorTypeCountsChanged] = await Promise.all([
         loadStatuses(), // 从后端拉取节点运行状态（处理数、等待数、失败数等），更新 nodeStatuses
-        loadStructure(), // 拉取任务结构（有向图），更新 structureData
+        loadGraphMeta(), // 拉取图元信息（拓扑 + 节点元信息 + 分析结果），更新 graphMeta
         loadErrors(), // 获取当前分页与筛选条件下的错误记录，更新 errors
-        loadAnalysis(), // 获取最新分析信息，更新 analysisData
         loadErrorTypeCounts(), // 获取错误类型聚合结果，更新仪表盘扇形图
     ]);
-    // 图级派生指标由前端本地估算：必须在结构与分析数据就绪后、渲染之前统一收口。
-    if (statusesChanged || structureChanged || analysisChanged) {
+    // 图级派生指标由前端本地估算：必须在图元信息就绪后、渲染之前统一收口。
+    if (statusesChanged || graphMetaChanged) {
         refreshNodeEstimates();
     }
     // 历史曲线依赖上一步算出的 nodeEstimates，因此延后到估算完成后再记录。
     if (statusesChanged) {
         appendStatusSnapshotToHistory(lastStatusTimestamp, nodeStatuses, nodeEstimates, lastNodeStatuses);
     }
-    // 结构图依赖结构数据，也会用节点状态给节点着色。
-    if (statusesChanged || structureChanged) {
+    // 结构图依赖图元信息，也会用节点状态给节点着色。
+    if (statusesChanged || graphMetaChanged) {
         renderMermaidStructure(nodeStatuses); // 左上结构图, 依赖节点信息与结构信息
     }
-    // 分析信息只在分析数据变更时刷新，避免无效重绘。
-    if (analysisChanged) {
+    // 分析信息随图元信息一同到达。
+    if (graphMetaChanged) {
         renderAnalysisInfo(); // 左下分析信息
     }
     // 节点状态变化会联动影响多个区域：状态卡、筛选器、注入页、折线图和汇总卡。

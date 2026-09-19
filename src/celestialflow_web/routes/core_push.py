@@ -9,10 +9,9 @@ from fastapi.responses import JSONResponse
 from ..runtime.util_cal import cal_interval
 from ..runtime.util_config import save_config
 from ..runtime.util_models import (
-    AnalysisModel,
     ErrorsModel,
+    GraphMetaModel,
     StatusModel,
-    StructureModel,
     TaskInjectionModel,
     TerminationInjectionModel,
     WebConfigModel,
@@ -96,12 +95,16 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
             )
 
     # ==== Reporter / Backend Pushes ====
-    @router.post("/api/push_structure", response_model=None)
-    async def push_structure(data: StructureModel) -> dict[str, bool] | JSONResponse:
+    @router.post("/api/push_graph_meta", response_model=None)
+    async def push_graph_meta(
+        data: GraphMetaModel,
+    ) -> dict[str, bool] | JSONResponse:
         """
-        更新图结构数据并递增版本号。
+        更新图元信息（图结构 + 节点构建期元信息 + 图分析结果）并递增版本号。
 
-        :param data: 图结构数据
+        三者同属构建期冻结信息，随首次 push 一并到达，因此合并为单次原子写入。
+
+        :param data: 图元信息数据
         :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
         """
         if not server.is_current_graph(data.graph_id):
@@ -109,29 +112,15 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
                 content={"ok": False, "error": "stale graph_id"},
                 status_code=409,
             )
-        server.update_structure_store(
+        server.update_graph_meta_store(
             {
                 "nodes": data.nodes,
                 "edges": data.edges,
                 "source_nodes": data.source_nodes,
+                "node_meta": data.node_meta,
+                "analysis": data.analysis,
             }
         )
-        return {"ok": True}
-
-    @router.post("/api/push_analysis", response_model=None)
-    async def push_analysis(data: AnalysisModel) -> dict[str, bool] | JSONResponse:
-        """
-        更新图分析信息并递增版本号。
-
-        :param data: 图分析数据
-        :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
-        """
-        if not server.is_current_graph(data.graph_id):
-            return JSONResponse(
-                content={"ok": False, "error": "stale graph_id"},
-                status_code=409,
-            )
-        server.update_analysis_store(data.analysis)
         return {"ok": True}
 
     @router.post("/api/push_status", response_model=None)
