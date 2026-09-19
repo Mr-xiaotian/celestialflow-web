@@ -1,4 +1,3 @@
-"use strict";
 /**
  * 图级派生指标估算模块
  * 前端自有的图级估算：仅依赖同一次状态快照中的原始计数与静态拓扑，
@@ -71,7 +70,7 @@ function topoSort(edges) {
  * @param {DownstreamMap} downstreamMap - 每个节点实际发送给各下游的任务数量，缺失节点或下游按 0 处理
  * @returns {CountMap} 估算得到的全局待处理任务数量
  */
-function calcGlobalPending(edges, processedMap, pendingMap, downstreamMap) {
+export function calcGlobalPending(edges, processedMap, pendingMap, downstreamMap) {
     const topoOrder = topoSort(edges);
     if (topoOrder === null) {
         throw new Error("calcGlobalPending() requires a DAG edges map");
@@ -123,7 +122,7 @@ function calcGlobalPending(edges, processedMap, pendingMap, downstreamMap) {
  * @param {number} elapsed - 已消耗时间（秒）
  * @returns {number} 预计剩余时间（秒）；已处理或待处理为 0 时返回 0
  */
-function calcRemaining(processed, pending, elapsed) {
+export function calcRemaining(processed, pending, elapsed) {
     if (processed && pending) {
         return (pending / processed) * elapsed;
     }

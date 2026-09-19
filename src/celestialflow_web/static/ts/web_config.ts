@@ -5,6 +5,11 @@
  * 不属于对外契约，因此留在本文件。
  */
 
+import { errorSortOrder, errorSortSelect, errors, renderErrorsTableHeader, setErrorPageSize, setErrorSortOrder } from "./errors.js";
+import { applyI18nDOM, currentLang, setLang, t } from "./i18n.js";
+import { autoRefreshToggle, historyLimitSelect, refreshSelect, statusTotalPendingToggle, structureEdgeLabelSelect, themeToggleBtn } from "./main.js";
+import type { DashboardColumnKey, DashboardLayout, ErrorColumnKey, Lang, StructureEdgeLabel, WebConfig } from "./types.js";
+
 type LegacyWebConfig = {
   theme?: "light" | "dark";
   autoRefreshEnabled?: boolean;
@@ -20,7 +25,7 @@ type LegacyWebConfig = {
 };
 
 /** 页面初始化和回退场景共用的默认配置。 */
-const DEFAULT_WEB_CONFIG: WebConfig = {
+export const DEFAULT_WEB_CONFIG: WebConfig = {
   global: {
     theme: "light",
     autoRefreshEnabled: true,
@@ -85,7 +90,7 @@ function normalizeDashboardLayout(
  * @param {ErrorColumnKey[] | null | undefined} rawColumns - 原始错误表格字段顺序。
  * @returns {ErrorColumnKey[]} 去重且只保留受支持字段后的稳定字段顺序。
  */
-function normalizeErrorColumns(
+export function normalizeErrorColumns(
   rawColumns?: ErrorColumnKey[] | null,
 ): ErrorColumnKey[] {
   const defaults = DEFAULT_WEB_CONFIG.errors.columns;
@@ -203,7 +208,13 @@ function normalizeWebConfig(
 }
 
 // 全局状态
-let webConfig: WebConfig = normalizeWebConfig(); // 当前加载的 Web 配置
+export let webConfig: WebConfig = normalizeWebConfig(); // 当前加载的 Web 配置
+export let refreshRate = 5000; // 轮询刷新间隔（毫秒），为 webConfig.global.refreshInterval 的归一化值
+
+/** 设置轮询刷新间隔（供主入口的刷新间隔下拉框跨模块写入） */
+export function setRefreshRate(value: number): void {
+  refreshRate = value;
+}
 let saveConfigPending = false; // 是否还有新的配置变更等待落盘
 let saveConfigPromise: Promise<boolean> | null = null; // 当前正在执行的保存队列
 
@@ -315,7 +326,7 @@ const CARD_TEMPLATES: Record<string, string> = {
 };
 
 /** 卡片 ID 到国际化标题 key 的映射。 */
-const CARD_META: Record<string, string> = {
+export const CARD_META: Record<string, string> = {
   mermaid: "card.mermaid.title",
   analysis: "card.analysis.title",
   status: "card.status.title",
@@ -325,7 +336,7 @@ const CARD_META: Record<string, string> = {
 };
 
 /** 当前支持加入布局编辑器的全部卡片 ID。 */
-const ALL_CARD_IDS: string[] = Object.keys(CARD_TEMPLATES);
+export const ALL_CARD_IDS: string[] = Object.keys(CARD_TEMPLATES);
 
 /**
  * 确保所有卡片节点都已出现在隐藏池中，供后续布局重排直接移动。
@@ -343,14 +354,15 @@ function ensureAllCards(): void {
   }
 }
 
-// 模块加载时立即创建所有卡片 DOM，确保后续脚本能通过 getElementById 找到元素
+// 模块加载时立即创建所有卡片 DOM，确保后续脚本能通过 getElementById 找到元素。
+// 注意：该调用依赖 ESM 求值顺序，因此调用方（main.ts）必须最先 import 本模块。
 ensureAllCards();
 
 /**
  * 从后端加载配置；失败时自动回退到默认配置继续启动页面。
  * @returns {Promise<void>} 配置加载流程完成后结束；无论成功或降级都会保证 `webConfig` 可用。
  */
-async function loadWebConfig(): Promise<void> {
+export async function loadWebConfig(): Promise<void> {
   try {
     const res = await fetch("/api/pull_config");
     if (!res.ok) {
@@ -400,7 +412,7 @@ async function performSaveWebConfig(): Promise<boolean> {
  *
  * @returns {Promise<boolean>} 当前保存队列完全落空后的最终结果。
  */
-async function saveWebConfig(): Promise<boolean> {
+export async function saveWebConfig(): Promise<boolean> {
   saveConfigPending = true;
 
   if (saveConfigPromise) {
@@ -428,7 +440,7 @@ async function saveWebConfig(): Promise<boolean> {
  * 包含语言切换、主题应用、下拉框同步和仪表盘重排
  * @returns {void}
  */
-function applyConfig(): void {
+export function applyConfig(): void {
   // 应用语言
   webConfig.global.language = webConfig.global.language || "zh-CN";
   setLang(webConfig.global.language);
@@ -470,7 +482,7 @@ function applyConfig(): void {
   webConfig.errors.pageSize = webConfig.errors.pageSize || 10;
   const eps = Number(webConfig.errors.pageSize); // 错误分页大小需要同步到运行时变量与下拉框
   if (Number.isFinite(eps) && eps > 0) {
-    pageSize = eps;
+    setErrorPageSize(eps);
     const epsStr = eps.toString(); // select 的 option 值是字符串
     const errorPageSizeSelect = document.getElementById(
       "error-page-size",
@@ -488,7 +500,7 @@ function applyConfig(): void {
   // 应用错误日志排序方式
   webConfig.errors.sortOrder =
     webConfig.errors.sortOrder === "oldest" ? "oldest" : "newest";
-  errorSortOrder = webConfig.errors.sortOrder;
+  setErrorSortOrder(webConfig.errors.sortOrder);
   errorSortSelect.value = errorSortOrder;
   webConfig.errors.jumpToInjectionAfterRetry =
     webConfig.errors.jumpToInjectionAfterRetry !== false;

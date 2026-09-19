@@ -3,6 +3,10 @@
  * 负责节点筛选、聚合数据拉取以及 doughnut 图和图例渲染
  */
 
+import { t } from "./i18n.js";
+import { escapeHtml } from "./utils.js";
+import type { ErrorTypeCount, ErrorTypeCountsPullResponse, NodeStatus } from "./types.js";
+
 let errorTypeCounts: ErrorTypeCount[] = []; // 当前筛选条件下的错误类型聚合结果
 let errorTypeCountsRev = -1; // 错误类型聚合数据版本号
 let errorTypeCountsQueryKey = ""; // 最近一次请求使用的筛选条件缓存键
@@ -60,7 +64,7 @@ function getEmptyErrorTypeColor(): string {
  * 初始化错误类型 doughnut 图实例。
  * @returns {void}
  */
-function initErrorTypeChart(): void {
+export function initErrorTypeChart(): void {
   const canvas = document.getElementById(
     "error-type-chart",
   ) as HTMLCanvasElement | null;
@@ -139,7 +143,7 @@ function renderErrorTypeLegend(): void {
  * 根据当前聚合结果刷新图表和图例。
  * @returns {void}
  */
-function renderErrorTypeChart(): void {
+export function renderErrorTypeChart(): void {
   if (!errorTypeChart) {
     initErrorTypeChart();
   }
@@ -168,7 +172,7 @@ function renderErrorTypeChart(): void {
  * @param {boolean} [forceReload=false] - 是否强制绕过 known_rev 缓存。
  * @returns {Promise<boolean>} 当聚合结果发生变化时返回 true。
  */
-async function loadErrorTypeCounts(forceReload: boolean = false): Promise<boolean> {
+export async function loadErrorTypeCounts(forceReload: boolean = false): Promise<boolean> {
   const filterEl = getErrorTypeNodeFilter();
   const node = filterEl?.value ?? "";
   const queryKey = node;
@@ -210,7 +214,7 @@ async function loadErrorTypeCounts(forceReload: boolean = false): Promise<boolea
  * @param {Record<string, NodeStatus>} statuses - 当前节点状态快照。
  * @returns {void}
  */
-function populateErrorTypeNodeFilter(statuses: Record<string, NodeStatus>): void {
+export function populateErrorTypeNodeFilter(statuses: Record<string, NodeStatus>): void {
   const filterEl = getErrorTypeNodeFilter();
   if (!filterEl) return;
 

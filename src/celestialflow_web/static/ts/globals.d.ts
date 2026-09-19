@@ -1,16 +1,9 @@
 /**
  * 全局类型声明文件
  *
- * 只含两部分：外部库（Chart.js / Sortable.js / Mermaid）的最小类型定义，
- * 以及由其他脚本导出的全局变量与函数声明。
+ * 只含外部库（Chart.js / Sortable.js / Mermaid）的最小类型定义。
  * 前后端契约类型见 types.d.ts。
  */
-
-declare function preloadInjectionDraftFromError(
-  nodeName: string,
-  taskData: unknown,
-  jumpToInjection?: boolean,
-): void;
 
 type ChartPoint = { x: number; y: number }; // Chart.js 折线图点坐标
 
@@ -118,21 +111,3 @@ type MermaidApi = {
 interface Window {
   mermaid: MermaidApi; // 挂在 window 上的 Mermaid 运行时对象
 }
-
-/** 支持的界面语言类型 */
-type Lang = "zh-CN" | "en" | "ja";
-
-/** 当前选中的语言标识 */
-declare var currentLang: Lang;
-
-/** 设置当前语言并更新 HTML 根节点 */
-declare function setLang(lang: Lang): void;
-
-/** 根据翻译键获取当前语言的文本 */
-declare function t(key: string, ...args: string[]): string;
-
-/** 将国际化属性应用到 DOM 元素 */
-declare function applyI18nDOM(): void;
-
-/** 根据当前配置重绘错误日志表头 */
-declare function renderErrorsTableHeader(): void;

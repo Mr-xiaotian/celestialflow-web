@@ -10,6 +10,8 @@
 
 // ==== 通用 ====
 
+export type Lang = "zh-CN" | "en" | "ja"; // 支持的界面语言
+
 type ApiVersionedResponse<T> = {
   rev: number; // 当前数据版本号
   data: T | null; // 当 known_rev 未变化时可能返回 null
@@ -18,7 +20,7 @@ type ApiVersionedResponse<T> = {
 // ==== 节点状态：/api/pull_status ====
 
 /** 节点运行时状态快照定义（与后端 payload 的字段形状一致） */
-type NodeStatus = {
+export type NodeStatus = {
   status: number; // 状态码：0-未运行, 1-运行中, 2-已停止
   tasks_processed: number; // 已处理任务总数
   tasks_pending: number; // 队列中等待的任务数
@@ -31,7 +33,7 @@ type NodeStatus = {
   elapsed_time: number; // 已运行秒数
 };
 
-type StatusPullResponse = ApiVersionedResponse<Record<string, NodeStatus>> & {
+export type StatusPullResponse = ApiVersionedResponse<Record<string, NodeStatus>> & {
   timestamp: number; // 本次状态快照的统一时间戳
 };
 
@@ -60,7 +62,7 @@ type AnalysisData = {
  * 三者由 reporter 在同一次 push 中原子写入，因此 `nodes` 非空即表示
  * 拓扑、`node_meta` 与 `analysis` 均已就绪。
  */
-type GraphMeta = {
+export type GraphMeta = {
   nodes: string[]; // 全量节点名列表
   edges: Record<string, string[]>; // 有向边邻接表
   source_nodes: string[]; // 入度为 0 的源节点列表
@@ -68,12 +70,12 @@ type GraphMeta = {
   analysis: AnalysisData | null; // 图分析结果；reporter 尚未推送时为 null
 };
 
-type GraphMetaPullResponse = ApiVersionedResponse<GraphMeta>; // 图元信息拉取响应
+export type GraphMetaPullResponse = ApiVersionedResponse<GraphMeta>; // 图元信息拉取响应
 
 // ==== 错误日志：/api/pull_errors ====
 
 /** 单条错误数据定义 */
-type ErrorData = {
+export type ErrorData = {
   ts: number; // 生命周期时间戳，单位为秒
   stage: string; // 错误发生的节点/阶段名称，用于节点筛选
   event_id: number; // 失败事件的唯一标识 ID，全局唯一
@@ -83,7 +85,7 @@ type ErrorData = {
   result_json: unknown; // 成功结果或失败时的占位结果
 };
 
-type ErrorsPullResponse = {
+export type ErrorsPullResponse = {
   rev: number; // 错误数据版本号
   page: number; // 当前页码
   page_size: number; // 每页条数
@@ -95,20 +97,20 @@ type ErrorsPullResponse = {
 
 // ==== 错误类型聚合：/api/pull_error_type_counts ====
 
-type ErrorTypeCount = {
+export type ErrorTypeCount = {
   error_type: string; // 错误类型名称
   count: number; // 该类型的错误条数
 };
 
-type ErrorTypeCountsPullResponse = ApiVersionedResponse<ErrorTypeCount[]>; // 错误类型聚合响应
+export type ErrorTypeCountsPullResponse = ApiVersionedResponse<ErrorTypeCount[]>; // 错误类型聚合响应
 
 // ==== 配置：/api/pull_config ====
 
-type DashboardColumnKey = "left" | "middle" | "right"; // 仪表盘三栏布局 key
+export type DashboardColumnKey = "left" | "middle" | "right"; // 仪表盘三栏布局 key
 
-type DashboardLayout = Record<DashboardColumnKey, string[]>; // 每个栏位内的卡片 ID 顺序
+export type DashboardLayout = Record<DashboardColumnKey, string[]>; // 每个栏位内的卡片 ID 顺序
 
-type ErrorColumnKey =
+export type ErrorColumnKey =
   | "index"
   | "event_id"
   | "message"
@@ -117,7 +119,7 @@ type ErrorColumnKey =
   | "time"
   | "retry"; // 错误日志表格可配置字段 key
 
-type StructureEdgeLabel = "none" | "delta" | "cumulative"; // 结构图边标签显示模式：无 / 增量 / 累计
+export type StructureEdgeLabel = "none" | "delta" | "cumulative"; // 结构图边标签显示模式：无 / 增量 / 累计
 
 type WebGlobalConfig = {
   theme: "light" | "dark"; // 界面主题
@@ -144,7 +146,7 @@ type WebInjectionConfig = {
   showInjectableOnly: boolean; // 注入页是否只显示可注入节点
 };
 
-type WebConfig = {
+export type WebConfig = {
   global: WebGlobalConfig; // 全局共享配置
   dashboard: WebDashboardConfig; // 仪表盘页配置
   errors: WebErrorsConfig; // 错误页配置

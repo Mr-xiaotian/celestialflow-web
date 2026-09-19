@@ -1,8 +1,10 @@
-"use strict";
 /**
  * 通用工具模块
  * 包含数值格式化、时间转换、设备检测及复杂的 UI 辅助逻辑
  */
+import { nodeFilter } from "./errors.js";
+import { t } from "./i18n.js";
+import { activateTab } from "./main.js";
 /**
  * 将大数格式化为易读的字符串
  * - 小于 10,000,000 (一千万)：使用千分位逗号分隔，如 1,234,567
@@ -10,7 +12,7 @@
  * @param {number} n - 原始数值
  * @returns {string} 格式化后的 HTML 字符串
  */
-function formatLargeNumber(n) {
+export function formatLargeNumber(n) {
     // 处理小于1000万的数：使用逗号分隔
     if (n < 10000000) {
         return n.toLocaleString('en-US');
@@ -28,7 +30,7 @@ function formatLargeNumber(n) {
  * @param {string} negClass - 负增量数值的 CSS 类名
  * @returns {string} 包含数值和带颜色增量的 HTML 字符串
  */
-function formatWithDelta(value, delta, deltaClass, negClass) {
+export function formatWithDelta(value, delta, deltaClass, negClass) {
     const fmtValue = formatLargeNumber(value); // 当前主值的格式化结果
     if (!delta || delta === 0)
         return fmtValue;
@@ -48,7 +50,7 @@ function isMobile() {
  * @param {string} str - 原始字符串
  * @returns {string} 转义后的安全字符串
  */
-function escapeHtml(str) {
+export function escapeHtml(str) {
     return str
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -63,7 +65,7 @@ function escapeHtml(str) {
  * @param {string} tooltipKey - 提示文案翻译键
  * @returns {string} 标签 HTML
  */
-function renderLabelWithTooltip(labelKey, tooltipKey) {
+export function renderLabelWithTooltip(labelKey, tooltipKey) {
     const label = escapeHtml(t(labelKey));
     const tooltip = escapeHtml(t(tooltipKey));
     return `
@@ -85,7 +87,7 @@ function renderLabelWithTooltip(labelKey, tooltipKey) {
  * @param {string} [nodeFilter] - 节点筛选值，不传或传空字符串则显示全部
  * @returns {void}
  */
-function switchToErrorsTab(nodeFilter = "") {
+export function switchToErrorsTab(nodeFilter = "") {
     // 先切换到错误日志页，确保筛选器所在页面处于可见状态。
     const errorsTabButton = document.querySelector(`.tab-btn[data-tab="errors"]`);
     if (errorsTabButton) {
@@ -102,7 +104,7 @@ function switchToErrorsTab(nodeFilter = "") {
  * 切换到任务注入标签页。
  * @returns {void}
  */
-function switchToInjectionTab() {
+export function switchToInjectionTab() {
     const injectionTabButton = document.querySelector(`.tab-btn[data-tab="task-injection"]`);
     if (injectionTabButton) {
         activateTab(injectionTabButton);
@@ -113,7 +115,7 @@ function switchToInjectionTab() {
  * @param {number} seconds - 秒数
  * @returns {string} 格式化后的时间字符串
  */
-function formatDuration(seconds) {
+export function formatDuration(seconds) {
     seconds = seconds > 0 ? Math.max(1, Math.floor(seconds)) : 0; // 正数至少展示 1 秒
     const hours = Math.floor(seconds / 3600);
     const remainder = seconds % 3600;
@@ -133,7 +135,7 @@ function formatDuration(seconds) {
  * @param {number} timestamp - Unix 时间戳（秒）
  * @returns {string} 格式化后的日期时间字符串
  */
-function formatTimestamp(timestamp) {
+export function formatTimestamp(timestamp) {
     const d = new Date(timestamp * 1000); // Unix 秒级时间戳转本地时间
     /** 将年/月/日/时/分/秒字段补齐为两位。 */
     const pad = (n) => String(n).padStart(2, "0");
@@ -151,7 +153,7 @@ function formatTimestamp(timestamp) {
  * @param {number} processed - 已处理任务数
  * @returns {string} 形如 `"1.44s/it"` 或 `"8.00it/s"` 的文本；缺少样本时返回 `"N/A"`
  */
-function formatAvgTime(elapsed, processed) {
+export function formatAvgTime(elapsed, processed) {
     if (!elapsed || !processed)
         return "N/A";
     const avgTime = elapsed / processed; // 秒/任务
@@ -166,7 +168,7 @@ function formatAvgTime(elapsed, processed) {
  * @param {number} max_length - 显示的最大字符数（超出将被截断）
  * @returns {string} 格式化字符串
  */
-function format_repr(obj, max_length) {
+export function format_repr(obj, max_length) {
     let obj_str = String(obj).replace(/\\/g, "\\\\").replace(/\n/g, "\\n"); // 保留换行与反斜杠的可见形式
     if (max_length <= 0 || obj_str.length <= max_length) {
         return obj_str;

@@ -4,6 +4,14 @@
  * 数据由 loaders.ts 提供，本文件只读不拉。
  */
 
+import { t } from "./i18n.js";
+import { graphMeta, lastNodeEstimates, lastNodeStatuses, nodeEstimates, nodeStatuses } from "./loaders.js";
+import { calcRemaining } from "./util_estimators.js";
+import { escapeHtml, formatAvgTime, formatDuration, formatTimestamp, formatWithDelta, renderLabelWithTooltip, switchToErrorsTab } from "./utils.js";
+import { webConfig } from "./web_config.js";
+import type { NodeEstimate } from "./loaders.js";
+import type { NodeStatus } from "./types.js";
+
 type ElapsedSegment = {
   className: string; // 对应的颜色 CSS 类名
   count: number; // 该类型任务数量
@@ -195,7 +203,7 @@ function renderElapsedDurationHtml(
  * 根据节点状态生成 HTML，显示进度条、统计数据等
  * @returns {void}
  */
-function renderDashboard(): void {
+export function renderDashboard(): void {
   dashboardGrid.innerHTML = "";
 
   if (!Object.keys(nodeStatuses).length) {

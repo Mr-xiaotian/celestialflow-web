@@ -1,9 +1,8 @@
-"use strict";
 /**
  * 国际化模块
  * 负责多语言翻译数据的维护和 DOM 文本的自动更新
  */
-var currentLang = "zh-CN"; // 当前全局语言，默认使用中文
+export var currentLang = "zh-CN"; // 当前全局语言，默认使用中文
 /** 翻译字典：包含中、英、日三种语言的 UI 文本映射 */
 const translations = {
     "zh-CN": {
@@ -458,7 +457,7 @@ const translations = {
  * 切换全局语言设置
  * @param {Lang} lang - 目标语言标识
  */
-function setLang(lang) {
+export function setLang(lang) {
     currentLang = lang;
     document.documentElement.lang = currentLang;
 }
@@ -468,7 +467,7 @@ function setLang(lang) {
  * @param {...string} args - 用于替换 {0}, {1}... 的参数列表
  * @returns {string} 翻译后的文本
  */
-function t(key, ...args) {
+export function t(key, ...args) {
     let s = translations[currentLang][key] ?? translations["zh-CN"][key] ?? key;
     // 逐个替换简单占位符，支持 {0}、{1} 这类模板参数。
     for (let i = 0; i < args.length; i++) {
@@ -483,7 +482,7 @@ function t(key, ...args) {
  * - data-i18n-title: 替换 title 属性
  * - data-i18n-aria-label: 替换 aria-label 属性
  */
-function applyI18nDOM() {
+export function applyI18nDOM() {
     // 批量替换直接显示文本的元素内容。
     document.querySelectorAll("[data-i18n]").forEach((el) => {
         const key = el.getAttribute("data-i18n");

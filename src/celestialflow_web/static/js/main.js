@@ -1,25 +1,38 @@
-"use strict";
 /**
  * 仪表盘主入口脚本
  * 负责全局事件监听、配置初始化以及主轮询逻辑的协调
  */
+// web_config.js 必须最先求值：它在模块加载时会注入所有卡片 DOM，
+// 后续模块的顶层 getElementById 依赖这些元素已存在（详见 ensureAllCards）。
+import { applyConfig, loadWebConfig, refreshRate, saveWebConfig, setRefreshRate, webConfig } from "./web_config.js";
+import { renderAnalysisInfo } from "./dashboard_analysis.js";
+import { initErrorTypeChart, loadErrorTypeCounts, populateErrorTypeNodeFilter, renderErrorTypeChart } from "./dashboard_error_types.js";
+import { appendStatusSnapshotToHistory, initHistoryChart, trimNodeHistories, updateChartData, updateChartTheme } from "./dashboard_history.js";
+import { renderDashboard } from "./dashboard_statuses.js";
+import { renderMermaidStructure } from "./dashboard_structure.js";
+import { renderSummary } from "./dashboard_summary.js";
+import { loadErrors, populateNodeFilter, renderErrors, resetErrorsPage, setErrorPageSize } from "./errors.js";
+import { applyI18nDOM, setLang, t } from "./i18n.js";
+import { refreshInjectionLocalizedText, renderInjectionPage, renderNodeList } from "./injection.js";
+// 只做副作用：该模块自行注册布局编辑器的 DOMContentLoaded 交互，无导出。
+import "./layout_editor.js";
+import { lastNodeStatuses, lastStatusTimestamp, loadGraphMeta, loadStatuses, nodeEstimates, nodeStatuses, refreshNodeEstimates } from "./loaders.js";
 // 全局配置与状态变量
-let refreshRate = 5000; // 轮询刷新间隔（毫秒）
 let refreshIntervalId = null; // 轮询定时器 ID
 // DOM 元素引用
-const refreshSelect = document.getElementById("refresh-interval"); // 刷新间隔下拉框
-const historyLimitSelect = document.getElementById("history-limit"); // 历史长度下拉框
+export const refreshSelect = document.getElementById("refresh-interval"); // 刷新间隔下拉框
+export const historyLimitSelect = document.getElementById("history-limit"); // 历史长度下拉框
 const settingsBtn = document.getElementById("settings-btn"); // 设置齿轮按钮
 const settingsPanel = document.getElementById("settings-panel"); // 设置悬浮面板
 const settingsClose = document.getElementById("settings-close"); // 设置面板关闭按钮
 const settingsStatus = document.getElementById("settings-status"); // 设置保存状态提示
-const themeToggleBtn = document.getElementById("theme-toggle"); // 主题切换按钮
+export const themeToggleBtn = document.getElementById("theme-toggle"); // 主题切换按钮
 const languageSelect = document.getElementById("language-select"); // 语言选择下拉框
-const autoRefreshToggle = document.getElementById("auto-refresh-toggle"); // 自动刷新开关
+export const autoRefreshToggle = document.getElementById("auto-refresh-toggle"); // 自动刷新开关
 const errorPageSizeSelect = document.getElementById("error-page-size"); // 错误每页条数下拉框
 const errorJumpToInjectionToggle = document.getElementById("error-jump-to-injection-toggle"); // 错误页任务注入后是否跳转
-const structureEdgeLabelSelect = document.getElementById("structure-edge-label"); // 结构图边标签显示模式下拉框
-const statusTotalPendingToggle = document.getElementById("status-total-pending-toggle"); // 节点状态卡等待值模式开关
+export const structureEdgeLabelSelect = document.getElementById("structure-edge-label"); // 结构图边标签显示模式下拉框
+export const statusTotalPendingToggle = document.getElementById("status-total-pending-toggle"); // 节点状态卡等待值模式开关
 const injectableOnlyToggle = document.getElementById("injectable-only-toggle"); // 注入页仅显示可注入节点开关
 const settingsCurrentGroup = document.getElementById("settings-current-group"); // 当前页设置分组
 const settingsCurrentLabel = document.getElementById("settings-current-label"); // 当前页设置分组标题
@@ -53,7 +66,7 @@ function syncAutoRefreshTimer() {
  * @param {string} messageKey - 状态消息的翻译键
  * @returns {void}
  */
-function showSettingsSaveStatus(messageKey) {
+export function showSettingsSaveStatus(messageKey) {
     if (settingsStatusTimer) {
         clearTimeout(settingsStatusTimer);
     }
@@ -149,7 +162,7 @@ function updateCurrentPageSettings() {
  * @param {HTMLElement} button - 被点击的 tab 按钮。
  * @returns {void}
  */
-function activateTab(button) {
+export function activateTab(button) {
     const tab = button.getAttribute("data-tab");
     tabButtons.forEach((b) => b.classList.remove("active"));
     tabContents.forEach((c) => c.classList.remove("active"));
@@ -203,7 +216,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     // 切换刷新间隔：更新轮询频率并保存配置
     refreshSelect.addEventListener("change", async () => {
-        refreshRate = parseInt(refreshSelect.value);
+        setRefreshRate(parseInt(refreshSelect.value));
         config.global.refreshInterval = refreshRate;
         showSettingsSaveStatus(await saveWebConfig() ? "settings.saveSuccess" : "settings.saveFailed");
         syncAutoRefreshTimer();
@@ -224,9 +237,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     // 切换错误每页条数：更新分页并重新加载
     errorPageSizeSelect.addEventListener("change", async () => {
-        pageSize = parseInt(errorPageSizeSelect.value);
-        config.errors.pageSize = pageSize;
-        currentPage = 1;
+        const nextPageSize = parseInt(errorPageSizeSelect.value);
+        setErrorPageSize(nextPageSize);
+        config.errors.pageSize = nextPageSize;
+        resetErrorsPage();
         await loadErrors(true);
         renderErrors();
         showSettingsSaveStatus(await saveWebConfig() ? "settings.saveSuccess" : "settings.saveFailed");

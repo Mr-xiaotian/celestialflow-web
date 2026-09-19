@@ -165,17 +165,52 @@ def test_index_page(client):
     # 验证模板是否包含关键元素
     assert 'id="dashboard"' in response.text
 
-def test_index_page_scripts_match_build_output(client):
-    """首页引用的 js 与编译产物必须一一对应。
+def _module_evaluation_order(entry: str) -> list[str]:
+    """按 ESM 规范近似推导从入口出发的模块求值顺序（环内已在求值的节点跳过）。"""
+    js_dir = Path(static_path) / "js"
+    order: list[str] = []
+    seen: set[str] = set()
 
-    前端没有模块系统，脚本加载清单靠在 templates 里手写，因此“漏引一个产物”
-    或“引用了不存在的产物”都只会在浏览器里静默失败，需要在这里卡住。
+    def visit(name: str) -> None:
+        if name in seen:
+            return
+        seen.add(name)
+        text = (js_dir / name).read_text(encoding="utf-8")
+        pattern = r'^import\s+(?:.*?from\s+)?"\./([\w.-]+\.js)";'
+        for dep in re.findall(pattern, text, re.MULTILINE):
+            visit(dep)
+        order.append(name)
+
+    visit(entry)
+    return order
+
+
+def test_entry_module_reaches_every_built_artifact(client):
+    """入口模块必须能到达全部编译产物。
+
+    前端用原生 ESM，templates 里只写一个入口，其余靠 import 串联；tsc 能校验
+    import 路径存在，但发现不了“产物没有任何人 import”这种死模块。
     """
     html = client.get("/").text
     referenced = set(re.findall(r"js/([\w.-]+\.js)", html))
     built = {path.name for path in (Path(static_path) / "js").glob("*.js")}
+    assert referenced <= built  # 首页引用的入口必须真实存在
+    assert set(_module_evaluation_order("main.js")) == built
 
-    assert referenced == built
+
+def test_card_injecting_module_evaluates_before_dashboards(client):
+    """web_config 必须先于各 dashboard 模块求值。
+
+    web_config 在模块加载时用 ensureAllCards() 注入全部卡片 DOM，而 dashboard_*
+    模块在顶层就 getElementById 这些卡片内的元素。旧方案靠 scripts.html 的手写
+    顺序保证，换成 ESM 后只能由入口的 import 顺序保证。
+    """
+    order = _module_evaluation_order("main.js")
+    config_at = order.index("web_config.js")
+    dashboards = [name for name in order if name.startswith("dashboard_")]
+
+    assert dashboards
+    assert all(order.index(name) > config_at for name in dashboards), order
 
 
 def test_config_api(client):

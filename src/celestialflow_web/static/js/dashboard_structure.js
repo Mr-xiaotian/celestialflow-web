@@ -1,10 +1,12 @@
-"use strict";
 /**
  * 图元信息展示模块
  *
  * 用 Mermaid.js 将任务有向图渲染为流程图，并根据节点状态实时着色；
  * 图元信息由 loaders.ts 提供，本文件只读不拉。
  */
+import { t } from "./i18n.js";
+import { graphMeta, lastNodeStatuses } from "./loaders.js";
+import { webConfig } from "./web_config.js";
 /** Mermaid 节点形状，取值由 `getNodeShape` 决定 */
 /**
  * 获取节点的唯一标识符 ID
@@ -52,7 +54,7 @@ function getShapeWrappedLabel(label, shape) {
  * @param {Record<string, NodeStatus>} [statuses={}] - 当前节点状态映射，用于节点着色和边增量计算。
  * @returns {void}
  */
-function renderMermaidStructure(statuses = {}) {
+export function renderMermaidStructure(statuses = {}) {
     const { nodes, edges, source_nodes, node_meta } = graphMeta; // 当前图元信息主数据
     const nodeNames = nodes; // 全量节点名，供空状态判断和遍历使用
     if (!nodeNames.length) {

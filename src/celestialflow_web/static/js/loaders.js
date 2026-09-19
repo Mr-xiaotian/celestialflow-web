@@ -1,4 +1,3 @@
-"use strict";
 /**
  * 数据层：模型状态与拉取
  *
@@ -7,16 +6,17 @@
  *
  * 契约类型见 types.d.ts；命名以 `load*` 开头的函数是唯一的网络入口。
  */
+import { calcGlobalPending, calcRemaining } from "./util_estimators.js";
 // ==== 节点状态模型 ====
-let nodeStatuses = {}; // 当前各节点运行状态
-let lastNodeStatuses = {}; // 上一轮状态快照，用于计算增量
-let nodeEstimates = {}; // 本轮图级派生值，与 nodeStatuses 同步轮转
-let lastNodeEstimates = {}; // 上一轮派生值，用于计算增量
+export let nodeStatuses = {}; // 当前各节点运行状态
+export let lastNodeStatuses = {}; // 上一轮状态快照，用于计算增量
+export let nodeEstimates = {}; // 本轮图级派生值，与 nodeStatuses 同步轮转
+export let lastNodeEstimates = {}; // 上一轮派生值，用于计算增量
 let statusRev = -1; // 上次拉取的数据版本号，-1 表示首次拉取全量
 let statusesRequestSeq = 0; // 请求序列号，防止旧状态响应覆盖新结果
-let lastStatusTimestamp = 0; // 最近一次状态快照的统一时间戳，供历史曲线记录使用
+export let lastStatusTimestamp = 0; // 最近一次状态快照的统一时间戳，供历史曲线记录使用
 // ==== 图元信息模型 ====
-let graphMeta = {
+export let graphMeta = {
     nodes: [],
     edges: {},
     source_nodes: [],
@@ -30,7 +30,7 @@ let graphMetaRequestSeq = 0; // 请求序列号，防止旧图元信息响应覆
  * 从后端 API 获取节点状态并更新全局变量；全局估算与历史曲线同步由 `refreshAll` 收口处理
  * @returns {Promise<boolean>} 当状态版本发生变化并成功更新时返回 `true`，否则返回 `false`。
  */
-async function loadStatuses() {
+export async function loadStatuses() {
     try {
         const requestSeq = ++statusesRequestSeq; // 为当前状态请求分配递增序号
         const res = await fetch(`/api/pull_status?known_rev=${statusRev}`);
@@ -55,7 +55,7 @@ async function loadStatuses() {
  * 一次拉取图拓扑、节点构建期元信息与图分析结果，并更新全局变量 graphMeta
  * @returns {Promise<boolean>} 当版本发生变化并成功更新时返回 `true`，否则返回 `false`。
  */
-async function loadGraphMeta() {
+export async function loadGraphMeta() {
     try {
         const requestSeq = ++graphMetaRequestSeq; // 为当前请求分配递增序号
         const res = await fetch(`/api/pull_graph_meta?known_rev=${graphMetaRev}`);
@@ -81,7 +81,7 @@ async function loadGraphMeta() {
  * 避免在拓扑缺失时静默算出退化的结果。
  * @returns {void}
  */
-function refreshNodeEstimates() {
+export function refreshNodeEstimates() {
     const analysis = graphMeta.analysis; // 图分析结果随图元信息一次性到达
     if (!graphMeta.nodes.length || !analysis) {
         return; // 图元信息尚未就绪

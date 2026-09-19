@@ -1,8 +1,9 @@
-"use strict";
 /**
  * 处理进度历史模块
  * 维护节点处理任务的历史序列，并使用 Chart.js 绘制进度折线图
  */
+import { t } from "./i18n.js";
+import { webConfig } from "./web_config.js";
 /** 趋势类指标到其累计来源字段的映射 */
 const DELTA_SOURCE_METRIC = {
     delta_tasks_processed: "tasks_processed",
@@ -176,7 +177,7 @@ function trimHistory(history) {
  * 按当前配置裁剪前端本地维护的历史点数量
  * @returns {boolean} 历史数据是否发生了变化。
  */
-function trimNodeHistories() {
+export function trimNodeHistories() {
     let changed = false;
     const nextHistories = {};
     for (const [node, history] of Object.entries(nodeHistories)) {
@@ -197,7 +198,7 @@ function trimNodeHistories() {
  * @param {Record<string, NodeStatus>} [previousStatuses={}] - 上一轮节点状态映射，用于识别节点重启。
  * @returns {boolean} 历史数据是否发生了变化。
  */
-function appendStatusSnapshotToHistory(timestamp, statuses, estimates, previousStatuses = {}) {
+export function appendStatusSnapshotToHistory(timestamp, statuses, estimates, previousStatuses = {}) {
     if (!Number.isFinite(timestamp) || timestamp <= 0) {
         return false;
     }
@@ -282,7 +283,7 @@ function getChartThemeColors() {
  * 创建 Chart.js 实例，配置图表选项、图例点击事件等
  * @returns {void}
  */
-function initHistoryChart() {
+export function initHistoryChart() {
     const ctx = document.getElementById("node-progress-chart").getContext("2d"); // Chart.js 绘图上下文
     // 销毁旧实例（关键）
     if (progressChart) {
@@ -353,7 +354,7 @@ function initHistoryChart() {
  * 更新折线图主题颜色（切换深色/浅色模式时调用，无需重建实例）
  * @returns {void}
  */
-function updateChartTheme() {
+export function updateChartTheme() {
     if (!progressChart)
         return;
     const legend = progressChart.options.plugins.legend;
@@ -378,7 +379,7 @@ function updateChartTheme() {
  * 提取节点进度历史数据，更新 Chart.js 实例的数据集并重绘
  * @returns {void}
  */
-function updateChartData() {
+export function updateChartData() {
     if (!progressChart)
         return;
     const chart = progressChart; // 收窄为非空实例，便于后续统一访问

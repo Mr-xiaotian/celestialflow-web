@@ -4,6 +4,10 @@
  * { node_name: [tasklist] } 结构。
  */
 
+import { t } from "./i18n.js";
+import { nodeStatuses } from "./loaders.js";
+import { escapeHtml, switchToInjectionTab } from "./utils.js";
+
 /** 校验提示的展示状态。 */
 type ValidationState = "success" | "error" | "neutral";
 
@@ -210,7 +214,7 @@ function syncInjectionStateWithStatuses(): void {
  *
  * @returns {void}
  */
-function renderInjectionPage(): void {
+export function renderInjectionPage(): void {
   syncInjectionStateWithStatuses();
   renderNodeList(getSearchInput().value);
   renderCurrentNodeEditor();
@@ -224,7 +228,7 @@ function renderInjectionPage(): void {
  * @param {string} [searchTerm=""] - 搜索关键词
  * @returns {void}
  */
-function renderNodeList(searchTerm = ""): void {
+export function renderNodeList(searchTerm = ""): void {
   const nodeListEl = document.getElementById("node-list");
   if (!nodeListEl) return;
 
@@ -344,7 +348,7 @@ function setDraftForNode(nodeName: string, value: string): void {
  * @param {boolean} [switchTab=true] - 是否在预填后切换到任务注入页
  * @returns {void}
  */
-function preloadInjectionDraftFromError(
+export function preloadInjectionDraftFromError(
   nodeName: string,
   taskData: unknown,
   switchTab = true,
@@ -748,7 +752,7 @@ function setTerminationButtonLoading(loading: boolean): void {
  *
  * @returns {void}
  */
-function refreshInjectionLocalizedText(): void {
+export function refreshInjectionLocalizedText(): void {
   const validationDiv = document.getElementById(
     "json-validation",
   ) as HTMLElement; // 编辑器下方校验提示

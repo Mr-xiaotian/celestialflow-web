@@ -1,9 +1,13 @@
-"use strict";
 /**
  * 节点状态监控模块
  * 负责各节点运行指标（成功、失败、等待、重复、速率等）的实时展示；
  * 数据由 loaders.ts 提供，本文件只读不拉。
  */
+import { t } from "./i18n.js";
+import { graphMeta, lastNodeEstimates, lastNodeStatuses, nodeEstimates, nodeStatuses } from "./loaders.js";
+import { calcRemaining } from "./util_estimators.js";
+import { escapeHtml, formatAvgTime, formatDuration, formatTimestamp, formatWithDelta, renderLabelWithTooltip, switchToErrorsTab } from "./utils.js";
+import { webConfig } from "./web_config.js";
 // DOM 元素引用
 const dashboardGrid = document.getElementById("dashboard-grid");
 /**
@@ -139,7 +143,7 @@ function renderElapsedDurationHtml(duration, digitClasses, defaultClassName) {
  * 根据节点状态生成 HTML，显示进度条、统计数据等
  * @returns {void}
  */
-function renderDashboard() {
+export function renderDashboard() {
     dashboardGrid.innerHTML = "";
     if (!Object.keys(nodeStatuses).length) {
         dashboardGrid.innerHTML = `<div class="empty-placeholder" style="grid-column: 1 / -1;">${t("status.noData")}</div>`;

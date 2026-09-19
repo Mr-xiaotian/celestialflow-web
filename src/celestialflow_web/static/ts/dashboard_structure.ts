@@ -5,6 +5,11 @@
  * 图元信息由 loaders.ts 提供，本文件只读不拉。
  */
 
+import { t } from "./i18n.js";
+import { graphMeta, lastNodeStatuses } from "./loaders.js";
+import { webConfig } from "./web_config.js";
+import type { NodeStatus } from "./types.js";
+
 /** Mermaid 节点形状，取值由 `getNodeShape` 决定 */
 /**
  * 获取节点的唯一标识符 ID
@@ -60,7 +65,7 @@ function getShapeWrappedLabel(label: string, shape: NodeShape): string {
  * @param {Record<string, NodeStatus>} [statuses={}] - 当前节点状态映射，用于节点着色和边增量计算。
  * @returns {void}
  */
-function renderMermaidStructure(statuses: Record<string, NodeStatus> = {}): void {
+export function renderMermaidStructure(statuses: Record<string, NodeStatus> = {}): void {
   const { nodes, edges, source_nodes, node_meta } = graphMeta; // 当前图元信息主数据
   const nodeNames = nodes; // 全量节点名，供空状态判断和遍历使用
 

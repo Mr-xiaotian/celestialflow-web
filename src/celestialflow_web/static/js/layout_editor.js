@@ -1,8 +1,10 @@
-"use strict";
 /**
  * 卡片布局编辑器
  * 悬浮窗口中用拖拽方式管理仪表盘左中右三栏的卡片排列
  */
+import { t } from "./i18n.js";
+import { showSettingsSaveStatus } from "./main.js";
+import { ALL_CARD_IDS, CARD_META, DEFAULT_WEB_CONFIG, applyConfig, saveWebConfig, webConfig } from "./web_config.js";
 let originalLayout = {
     left: [],
     middle: [],

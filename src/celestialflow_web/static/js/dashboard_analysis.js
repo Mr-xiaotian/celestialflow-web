@@ -1,15 +1,17 @@
-"use strict";
 /**
  * 拓扑分析展示模块
  * 负责展示图元信息中的拓扑分析结果（如是否为 DAG、图模式等）；
  * 分析结果随图元信息由 loaders.ts 提供，本文件只读不拉。
  */
+import { t } from "./i18n.js";
+import { graphMeta } from "./loaders.js";
+import { escapeHtml, formatTimestamp, renderLabelWithTooltip } from "./utils.js";
 /**
  * 渲染分析信息面板
  * 根据 graphMeta.analysis 在页面上显示结构类型、DAG 状态、图模式和层级数量等信息
  * @returns {void}
  */
-function renderAnalysisInfo() {
+export function renderAnalysisInfo() {
     const container = document.getElementById("analysis-info"); // 分析卡片内容容器
     if (!container)
         return;

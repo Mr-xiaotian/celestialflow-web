@@ -1,8 +1,12 @@
-"use strict";
 /**
  * 错误日志分页与过滤模块
  * 处理错误记录的异步拉取、前端分页逻辑以及按节点/关键词搜索的过滤展示
  */
+import { t } from "./i18n.js";
+import { preloadInjectionDraftFromError } from "./injection.js";
+import { showSettingsSaveStatus } from "./main.js";
+import { formatTimestamp, format_repr } from "./utils.js";
+import { DEFAULT_WEB_CONFIG, normalizeErrorColumns, saveWebConfig, webConfig } from "./web_config.js";
 const ERROR_COLUMN_META = {
     index: { labelKey: "errors.colIndex" },
     event_id: { labelKey: "errors.colId", cellClassName: "error-id" },
@@ -21,10 +25,22 @@ const ERROR_COLUMNS_ZONE_IDS = [
     "errors-columns-dropzone-hidden",
 ]; // 字段编辑器中支持互拖的全部区域 ID
 // 全局状态
-let errors = []; // 错误记录列表
-let currentPage = 1; // 当前分页页码
-let pageSize = 10; // 每页显示条数
-let errorSortOrder = "newest"; // 错误日志默认排序
+export let errors = []; // 错误记录列表
+export let currentPage = 1; // 当前分页页码
+export let pageSize = 10; // 每页显示条数
+export let errorSortOrder = "newest"; // 错误日志默认排序
+/** 设置错误日志每页条数（供设置面板与配置应用跨模块写入） */
+export function setErrorPageSize(value) {
+    pageSize = value;
+}
+/** 设置错误日志排序方式（供配置应用跨模块写入） */
+export function setErrorSortOrder(value) {
+    errorSortOrder = value;
+}
+/** 重置错误日志到第一页（供设置面板跨模块写入） */
+export function resetErrorsPage() {
+    currentPage = 1;
+}
 let totalPages = 1; // 总页数
 let errorsRev = -1; // 数据版本号，用于增量拉取
 let lastQueryKey = ""; // 上次查询的缓存键，用于判断筛选条件是否变化
@@ -33,8 +49,8 @@ let originalErrorColumns = []; // 打开字段编辑器时的字段快照
 let errorColumnSortableInstances = {}; // 字段编辑器拖拽实例缓存
 // DOM 元素引用（错误页）
 const searchInput = document.getElementById("error-search");
-const nodeFilter = document.getElementById("node-filter");
-const errorSortSelect = document.getElementById("error-sort-order");
+export const nodeFilter = document.getElementById("node-filter");
+export const errorSortSelect = document.getElementById("error-sort-order");
 const errorsTableHeadRow = document.querySelector("#errors-table thead tr");
 const errorsTableBody = document.querySelector("#errors-table tbody");
 const paginationContainer = document.getElementById("pager-container");
@@ -199,7 +215,7 @@ function resetErrorColumns() {
  * 根据当前配置重绘错误日志表头。
  * @returns {void}
  */
-function renderErrorsTableHeader() {
+export function renderErrorsTableHeader() {
     const visibleColumns = getActiveErrorColumns();
     errorsTableHeadRow.innerHTML = "";
     for (const columnId of visibleColumns) {
@@ -309,7 +325,7 @@ function buildErrorsQueryKey(page, pageSizeValue, node, keyword, sortOrder) {
  * @param {boolean} [forceReload=false] - 是否忽略当前查询缓存与 `known_rev`，强制重新拉取。
  * @returns {Promise<boolean>} 当后端返回了新的错误记录数据时返回 `true`，否则返回 `false`。
  */
-async function loadErrors(forceReload = false) {
+export async function loadErrors(forceReload = false) {
     try {
         const node = nodeFilter.value.trim(); // 当前节点筛选值
         const keyword = (searchInput.value || "").trim(); // 当前关键词筛选值
@@ -352,7 +368,7 @@ async function loadErrors(forceReload = false) {
  * 渲染错误列表表格和分页控件
  * 将获取到的错误记录填充到表格中，并根据总页数生成分页按钮
  */
-function renderErrors() {
+export function renderErrors() {
     const pageItems = errors; // 后端已按分页返回当前页数据
     const visibleColumns = getActiveErrorColumns();
     errorsTableBody.innerHTML = "";
@@ -459,7 +475,7 @@ function renderPaginationControls(totalPages) {
  * @param {Record<string, NodeStatus>} statuses - 节点状态映射
  * @returns {void}
  */
-function populateNodeFilter(statuses) {
+export function populateNodeFilter(statuses) {
     const nodes = Object.keys(statuses); // 当前可供筛选的节点名列表
     const previousValue = nodeFilter.value; // 尽量保留用户当前筛选条件
     nodeFilter.innerHTML = `<option value="">${t("errors.allNodes")}</option>`;

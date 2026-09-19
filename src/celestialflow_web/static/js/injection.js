@@ -1,9 +1,11 @@
-"use strict";
 /**
  * 任务手动注入模块
  * 当前设计改为单节点编辑 + 批量提交：每个节点维护独立草稿，最终统一发送为
  * { node_name: [tasklist] } 结构。
  */
+import { t } from "./i18n.js";
+import { nodeStatuses } from "./loaders.js";
+import { escapeHtml, switchToInjectionTab } from "./utils.js";
 // ======== 页面级状态 ========
 // 当前正在编辑的节点名称；未选择节点时为 null。
 let currentNodeName = null;
@@ -175,7 +177,7 @@ function syncInjectionStateWithStatuses() {
  *
  * @returns {void}
  */
-function renderInjectionPage() {
+export function renderInjectionPage() {
     syncInjectionStateWithStatuses();
     renderNodeList(getSearchInput().value);
     renderCurrentNodeEditor();
@@ -188,7 +190,7 @@ function renderInjectionPage() {
  * @param {string} [searchTerm=""] - 搜索关键词
  * @returns {void}
  */
-function renderNodeList(searchTerm = "") {
+export function renderNodeList(searchTerm = "") {
     const nodeListEl = document.getElementById("node-list");
     if (!nodeListEl)
         return;
@@ -303,7 +305,7 @@ function setDraftForNode(nodeName, value) {
  * @param {boolean} [switchTab=true] - 是否在预填后切换到任务注入页
  * @returns {void}
  */
-function preloadInjectionDraftFromError(nodeName, taskData, switchTab = true) {
+export function preloadInjectionDraftFromError(nodeName, taskData, switchTab = true) {
     currentNodeName = nodeName;
     const currentDraft = (nodeDrafts[nodeName] || "").trim();
     let nextTaskList = [taskData];
@@ -645,7 +647,7 @@ function setTerminationButtonLoading(loading) {
  *
  * @returns {void}
  */
-function refreshInjectionLocalizedText() {
+export function refreshInjectionLocalizedText() {
     const validationDiv = document.getElementById("json-validation"); // 编辑器下方校验提示
     const validationMessageKey = validationDiv.dataset.messageKey; // 当前校验提示翻译键
     if (validationMessageKey) {

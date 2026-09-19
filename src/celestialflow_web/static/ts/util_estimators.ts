@@ -8,10 +8,10 @@
 type GraphEdges = Record<string, string[]>;
 
 /** 以节点名为键的计数映射 */
-type CountMap = Record<string, number>;
+export type CountMap = Record<string, number>;
 
 /** 每节点发往各下游的任务数：{上游节点: {下游节点: 任务数}} */
-type DownstreamMap = Record<string, Record<string, number>>;
+export type DownstreamMap = Record<string, Record<string, number>>;
 
 /** 图拓扑索引：节点全集与前驱邻接表 */
 type GraphIndex = {
@@ -95,7 +95,7 @@ function topoSort(edges: GraphEdges): string[] | null {
  * @param {DownstreamMap} downstreamMap - 每个节点实际发送给各下游的任务数量，缺失节点或下游按 0 处理
  * @returns {CountMap} 估算得到的全局待处理任务数量
  */
-function calcGlobalPending(
+export function calcGlobalPending(
   edges: GraphEdges,
   processedMap: CountMap,
   pendingMap: CountMap,
@@ -158,7 +158,7 @@ function calcGlobalPending(
  * @param {number} elapsed - 已消耗时间（秒）
  * @returns {number} 预计剩余时间（秒）；已处理或待处理为 0 时返回 0
  */
-function calcRemaining(
+export function calcRemaining(
   processed: number,
   pending: number,
   elapsed: number,

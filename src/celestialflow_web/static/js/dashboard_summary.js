@@ -1,9 +1,10 @@
-"use strict";
 /**
  * 全局汇总统计模块
  * 负责计算和展示整个图任务的总体进度、成功/失败总量及预计剩余时间；
  * 汇总自 loaders.ts 的模型数据，本文件只读不拉。
  */
+import { nodeEstimates, nodeStatuses } from "./loaders.js";
+import { formatDuration, formatLargeNumber, switchToErrorsTab } from "./utils.js";
 // DOM 元素引用（汇总面板）
 const totalSucceeded = document.getElementById("total-succeeded");
 const totalPending = document.getElementById("total-pending");
@@ -17,7 +18,7 @@ const totalRemain = document.getElementById("total-remain");
  * 图级剩余时间由前端基于各节点的派生估算取最大值得到。
  * @returns {void}
  */
-function renderSummary() {
+export function renderSummary() {
     const statusList = Object.values(nodeStatuses || {}); // 当前全部节点状态快照
     const total_succeeded = statusList.reduce((sum, status) => sum + (status.tasks_succeeded || 0), 0); // 总成功任务数
     const total_pending = statusList.reduce((sum, status) => sum + (status.tasks_pending || 0), 0); // 总等待任务数
