@@ -1,6 +1,6 @@
-# injection_editor.css
+# src/celestialflow_web/static/css/injection_editor.css
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 负责任务注入页右侧编辑器的样式定义，包括 JSON 输入区域、校验消息、操作按钮组。
 

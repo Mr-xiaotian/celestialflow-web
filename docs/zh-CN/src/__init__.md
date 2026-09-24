@@ -1,6 +1,6 @@
-# Web 模块
+# src/celestialflow_web/__init__.py
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/09/24
 
 `celestialflow_web` 包提供 CelestialFlow 的独立 Web 监控界面，基于 FastAPI 与原生 TypeScript 构建，支持任务状态可视化、错误追踪、任务注入和前端配置持久化。
 
@@ -41,15 +41,19 @@
 1. **main.ts** — 全局入口与轮询协调
 2. **utils.ts** — 通用工具函数
 3. **i18n.ts** — 国际化支持
-4. **web_config.ts** — 配置管理逻辑
-5. **dashboard_statuses.ts** — 渲染动态节点卡片，展示各阶段实时性能指标与进度条
-6. **dashboard_structure.ts** — 基于 Mermaid.js 渲染任务图拓扑结构，支持动态节点着色
-7. **dashboard_history.ts** — 维护多指标历史序列，使用 Chart.js 渲染进度折线图
-8. **dashboard_summary.ts** — 全局统计看板的渲染与更新
-9. **dashboard_analysis.ts** — 拓扑分析信息的展示
-10. **errors.ts** — 错误日志的分页展示与深度过滤
-11. **injection.ts** — 管理任务手动注入 UI，支持多节点批量注入
-12. **layout_editor.ts** — 卡片布局编辑器（依赖 web_config 的 CARD_TEMPLATES/PANEL_SELECTOR_MAP）
+4. **web_config.ts** — 配置管理逻辑 + 卡片 DOM 注入（模块加载时调用 `ensureAllCards()`）
+5. **loaders.ts** — 数据层：状态/图元信息拉取、版本守卫与本地派生
+6. **util_estimators.ts** — 图级派生指标估算（全局待处理量、预计剩余时间）
+7. **types.d.ts** — 前后端契约类型声明（纯类型，不产出 JS）
+8. **dashboard_statuses.ts** — 渲染动态节点卡片，展示各阶段实时性能指标与进度条
+9. **dashboard_structure.ts** — 基于 Mermaid.js 渲染任务图拓扑结构，支持动态节点着色
+10. **dashboard_history.ts** — 维护多指标历史序列，使用 Chart.js 渲染进度折线图
+11. **dashboard_summary.ts** — 全局统计看板的渲染与更新
+12. **dashboard_analysis.ts** — 拓扑分析信息的展示
+13. **dashboard_error_types.ts** — 错误类型分布 doughnut 图与图例
+14. **errors.ts** — 错误日志的分页展示与深度过滤
+15. **injection.ts** — 管理任务手动注入 UI，支持多节点批量注入
+16. **layout_editor.ts** — 卡片布局编辑器（依赖 web_config 的 CARD_TEMPLATES/PANEL_SELECTOR_MAP）
 
 ## 架构特点
 

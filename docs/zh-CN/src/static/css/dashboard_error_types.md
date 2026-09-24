@@ -1,6 +1,6 @@
-# dashboard_error_types.css
+# src/celestialflow_web/static/css/dashboard_error_types.css
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
 负责仪表盘"错误类型分布"面板的样式定义，采用环形图加图例的方式展示各节点下错误类型的占比分布。
 

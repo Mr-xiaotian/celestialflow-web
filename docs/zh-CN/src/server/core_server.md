@@ -1,6 +1,6 @@
-# TaskWebServer（core_server）
+# src/celestialflow_web/server/core_server.py
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
 TaskWeb 模块提供了一个基于 FastAPI 的轻量级 Web 服务器，用于实时监控和管理任务图的运行。它充当了 `TaskReporter` (后端) 与 Web UI (前端) 之间的中转站。
 
@@ -71,18 +71,17 @@ TaskWeb 提供了一系列 RESTful API 供 `TaskReporter` 调用和前端使用�
 
 ### 拉取接口 (GET /api/pull_*)
 
-大部分拉取接口（`pull_status`、`pull_structure`、`pull_errors`、`pull_error_type_counts`）支持 `known_rev` 机制：若服务端数据版本未变，则返回 `data: null` 以节省带宽。`pull_analysis` 当前实现始终返回最新数据，不参与 `known_rev` 节流；`pull_config`、`pull_injection`、`pull_server_state` 不使用 `known_rev` 机制，每次均返回完整数据（其中 `pull_server_state` 会调用 `sync_graph_context`，有副作用）。
+支持 `known_rev` 机制的拉取接口（`pull_status`、`pull_graph_meta`、`pull_errors`、`pull_error_type_counts`）在服务端数据版本未变时返回 `data: null` 以节省带宽；`pull_config`、`pull_injection`、`pull_server_state` 不使用 `known_rev` 机制，每次均返回完整数据（其中 `pull_server_state` 会调用 `sync_graph_context`，有副作用）。
 
 | 端点 | 返回结构 (data 字段) | 说明 |
 |------|--------------------|------|
 | `pull_config` | `dict` | 获取主题、语言、刷新频率等全局配置 |
-| `pull_structure`| `dict[str, Any]` | 获取任务图的拓扑结构（含 nodes/edges/source_nodes） |
+| `pull_graph_meta` | `dict[str, Any]` | 获取图元信息（图结构 + 节点构建期元信息 + 图分析结果） |
 | `pull_status` | `dict[str, dict[str, Any]]` | 获取各节点的实时运行指标及统一时间戳 |
 | `pull_errors` | `list[dict]` | 分页拉取错误日志，支持节点/关键词过滤与排序 |
-| `pull_analysis` | `dict[str, Any]` | 获取图的拓扑分析结果；无分析数据时 `data` 为 `None` |
 | `pull_error_type_counts` | `list[dict[str, Any]]` | 按错误类型聚合的统计结果，支持按节点过滤 |
 | `pull_injection` | `{"tasks": dict[str, list[Any]], "terminations": list[str]}` | 供 TaskGraph 拉取待注入的任务队列与终止符（任务按节点名分组，读取后清空） |
-| `pull_server_state` | `dict[str, Any]` | 获取 Reporter 同步所需的服务端状态（interval/is_current_graph/has_structure/has_analysis/max_event_id_in_fail） |
+| `pull_server_state` | `dict[str, Any]` | 获取 Reporter 同步所需的服务端状态（interval/is_current_graph/has_graph_meta/max_event_id_in_fail） |
 
 ### 推送接口 (POST /api/push_*)
 
@@ -92,8 +91,7 @@ TaskWeb 提供了一系列 RESTful API 供 `TaskReporter` 调用和前端使用�
 |------|---------|------|
 | `push_config` | `WebConfigModel` | 由前端调用，保存用户设置 |
 | `push_status` | `StatusModel` | 上报节点状态快照 + 当前时间戳 |
-| `push_structure`| `StructureModel` | 上报图结构 |
-| `push_analysis` | `AnalysisModel` | 上报分析数据 |
+| `push_graph_meta` | `GraphMetaModel` | 上报图元信息（图结构 + 节点构建期元信息 + 分析结果）；`graph_id` 不匹配时返回 409 |
 | `push_errors` | `ErrorsModel` | 直接推送错误内容并写入 SQLite |
 | `push_injection_tasks` | `TaskInjectionModel` | 前端提交任务注入请求 |
 | `push_injection_terminations` | `TerminationInjectionModel` | 前端提交终止符注入请求 |
@@ -102,18 +100,20 @@ TaskWeb 提供了一系列 RESTful API 供 `TaskReporter` 调用和前端使用�
 
 > 完整模型定义见 `util_models.md`，此处仅列出核心字段。
 
-### StructureModel
+### GraphMetaModel
 
 ```python
-class StructureModel(BaseModel):
+class GraphMetaModel(BaseModel):
     graph_id: str = ""  # 图实例标识，用于 Reporter 端 graph 上下文校验
-    nodes: dict[str, dict[str, Any]] = Field(
-        default_factory=dict
-    )  # 节点字典，键为节点名，值为节点属性
+    nodes: list[str] = Field(default_factory=list)  # 节点名称列表
     edges: dict[str, list[str]] = Field(
         default_factory=dict
     )  # 边字典，键为源节点名，值为目标节点名列表
     source_nodes: list[str] = Field(default_factory=list)  # 源节点列表
+    node_meta: dict[str, dict[str, Any]] = Field(
+        default_factory=dict
+    )  # 节点构建期元信息，键为节点名
+    analysis: dict[str, Any] | None = None  # 图分析结果
 ```
 
 ### StatusModel
@@ -131,14 +131,6 @@ class StatusModel(BaseModel):
 class ErrorsModel(BaseModel):
     graph_id: str = ""  # 图实例标识
     errors: list[dict[str, Any]]  # 错误记录列表，直接写入 SQLite 数据库
-```
-
-### AnalysisModel
-
-```python
-class AnalysisModel(BaseModel):
-    graph_id: str = ""  # 图实例标识
-    analysis: dict[str, Any]  # 分析结果字典
 ```
 
 ### TaskInjectionModel
@@ -250,9 +242,8 @@ graph.start_graph(init_tasks)
 ```
 TaskGraph                         TaskWeb                    Browser
     |                                |                          |
-    |--- push_structure ------------>|--- Dashboard ----------->|
+    |--- push_graph_meta ---------->|--- Dashboard ----------->|
     |--- push_status --------------->|                          |
-    |--- push_analysis ------------->|                          |
     |                                |                          |
     |--- push_errors --------------->|---- Errors ------------->|
     |                                |                          |

@@ -1,6 +1,6 @@
-# dashboard_analysis.css
+# src/celestialflow_web/static/css/dashboard_analysis.css
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 负责仪表盘左下角"图分析信息"卡片的样式定义。
 

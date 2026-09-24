@@ -1,6 +1,6 @@
-# injection_layout.css
+# src/celestialflow_web/static/css/injection_layout.css
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/09/24
 
 负责任务注入页的搜索筛选、双栏布局以及响应式断点样式。
 

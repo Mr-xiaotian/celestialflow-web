@@ -1,75 +1,51 @@
-# dashboard_structure.ts
+# src/celestialflow_web/static/ts/dashboard_structure.ts
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
-管理任务图结构数据的加载与 Mermaid 流程图的可视化渲染，支持基于节点状态的实时着色和边增量显示。
+用 Mermaid.js 将任务有向图渲染为流程图，并根据节点状态实时着色、按配置在边上显示增量或累计标签。
+
+> 图元信息（`graphMeta`）由 `loaders.ts` 提供，本文件只读不拉；上一轮状态 `lastNodeStatuses` 亦来自 `loaders.ts`，用于计算边增量。
 
 ## 类型定义
 
 ```typescript
-type StructureNodeMeta = {
-  func_name: string;       // 节点函数名，用于推导节点类型（如 _split, _route）
-  execution_mode: string;  // 节点执行模式
-  max_workers: number;     // 并发 worker 数上限
-};
-
-type StructureGraph = {
-  nodes: Record<string, StructureNodeMeta>; // 节点名到元信息的映射
-  edges: Record<string, string[]>;         // 有向边邻接表
-  source_nodes: string[];                   // 入度为 0 的源节点列表
-};
+/** Mermaid 节点形状，取值由 getNodeShape 决定 */
+type NodeShape = "box" | "rhombus" | "subgraph";
 ```
-
-## 全局变量
-
-| 变量 | 类型 | 说明 |
-|------|------|------|
-| `structureData` | `StructureGraph` | 任务结构图数据（有向图），默认含空的 `nodes`/`edges`/`source_nodes` |
-| `structureRev` | `number` | 上次拉取的版本号，初始化 `-1`，用于增量拉取 |
-| `structureRequestSeq` | `number` | 请求序列号，防止旧结构响应覆盖新结果 |
 
 ## 函数
 
-### `loadStructure(): Promise<boolean>`
-
-异步从 `GET /api/pull_structure?known_rev=N` 拉取图结构。使用 `structureRequestSeq` 作竞态保护。
-
----
-
 ### `getNodeId(nodeName: string): string`
 
-生成 Mermaid 兼容的节点 ID（替换非单词字符为 `_`）。
+生成 Mermaid 兼容的节点 ID（将非单词字符替换为 `_`）。
 
----
+### `getNodeShape(className?: string): NodeShape`
 
-### `getNodeShape(nodeMeta: StructureNodeMeta): string`
+根据图元信息 `node_meta[node].class_name` 推导 Mermaid 形状，与每轮状态快照解耦：
 
-根据节点元信息的 `func_name` 推导 Mermaid 形状类型。
+| `class_name` | 形状 | Mermaid 语法 | 说明 |
+|--------------|------|--------------|------|
+| `TaskSplitter` | `subgraph` | `[[label]]` | 拆分/分流节点 |
+| `TaskRouter` | `rhombus` | `{{label}}` | 路由/决策节点 |
+| 其他 / 缺失 | `box` | `[label]` | 普通处理节点 |
 
-| `func_name` | 形状 | 说明 |
-|-------------|------|------|
-| `_split` | `subgraph` | 分流/拆分节点 |
-| `_route` | `rhombus` | 路由/决策节点 |
-| `_transport` / `_source` / `_ack` | `parallelogram` | 输入输出类节点 |
-| 其他 | `box` | 普通处理节点 |
+### `getShapeWrappedLabel(label: string, shape: NodeShape): string`
 
----
-
-### `getShapeWrappedLabel(label: string, shape?: string): string`
-
-根据形状类型生成 Mermaid 语法的节点标签。支持 10 种形状：`box`、`circle`、`round`、`rhombus`、`subgraph`、`parallelogram`、`db`、`cloud`、`hex`、`arrow`。
-
----
+根据形状类型生成 Mermaid 语法的节点标签，仅支持 `box`、`rhombus`、`subgraph` 三种。
 
 ### `renderMermaidStructure(statuses?: Record<string, NodeStatus>): void`
 
-构建 Mermaid 流程图代码并调用 `window.mermaid.run()` 渲染。
+构建 Mermaid 代码并调用 `window.mermaid.run()` 渲染。
 
 **主要特性：**
 
-- **动态着色**：根据 `statuses` 中的 `status` 码自动应用颜色类（`greenNode`=运行中，`greyNode`=已停止，`whiteNode`=未启动）。
-- **主题适配**：自动识别 `dark-theme` 类，切换 Mermaid 的 `classDef` 颜色方案（深色/浅色两套）。
-- **边增量显示**：若 `webConfig.dashboard.showStructureEdgeDelta` 开启，在边（Edge）上显示 `|+N|` 标签（取自上一轮到本轮的 `tasks_succeeded` 增量）。
+- **空态处理**：图元信息尚未就绪（`nodes` 为空）时，用空态占位替换 `#mermaid-container`。
+- **动态着色**：按 `statuses` 中的 `status` 码应用 `classDef`（`greenNode`=运行中，`greyNode`=已停止，`whiteNode`=未启动）。
+- **主题适配**：识别 `dark-theme` 类，切换 `classDef` 深浅两套配色。
+- **边标签模式**：由 `webConfig.dashboard.structureEdgeLabel` 控制：
+  - `none`：不显示任何边标签；
+  - `delta`：显示该边相对上一轮 `downstream_counts` 的增量 `|+N|`（仅当增量为正）；
+  - `cumulative`：显示该上游到该下游的累计传输数 `|N|`。
 - **源节点优先**：`source_nodes` 排在非源节点之前，增强拓扑图可读性。
 - **容器替换**：每次渲染创建新 `#mermaid-container` 替换旧容器，避免 Mermaid 对旧 DOM 状态的残留问题。
 
@@ -86,13 +62,14 @@ type StructureGraph = {
 ```mermaid
 sequenceDiagram
     participant Main as main.ts
+    participant Loaders as loaders.ts
     participant Struct as dashboard_structure.ts
-    participant API as /api/pull_structure
+    participant API as /api/pull_graph_meta
     participant Mermaid as window.mermaid
 
-    Main->>Struct: loadStructure()
-    Struct->>API: GET ?known_rev=N
-    API-->>Struct: { rev, data: StructureGraph|null }
+    Main->>Loaders: loadGraphMeta()
+    Loaders->>API: GET ?known_rev=N
+    API-->>Loaders: { rev, data: GraphMeta|null }
     Main->>Struct: renderMermaidStructure(nodeStatuses)
     Struct->>Struct: 构建 Mermaid 代码 (graph TD)
     Struct->>Mermaid: mermaid.run()
@@ -102,25 +79,22 @@ sequenceDiagram
 ## 使用示例
 
 ```typescript
-// 模拟结构数据
-const mockStructure: StructureGraph = {
-  nodes: {
-    "DataLoader": { func_name: "_source", execution_mode: "serial", max_workers: 1 },
-    "Processor":  { func_name: "process", execution_mode: "thread", max_workers: 4 },
-    "Router":     { func_name: "_route", execution_mode: "serial", max_workers: 1 },
-  },
-  edges: {
-    "DataLoader": ["Processor"],
-    "Processor":  ["Router"],
-  },
-  source_nodes: ["DataLoader"],
-};
-
-// structureData = mockStructure;
+// graphMeta 由 loaders.ts 的 loadGraphMeta() 维护，结构形如：
+// {
+//   nodes: ["DataLoader", "Processor", "Router"],
+//   edges: { DataLoader: ["Processor"], Processor: ["Router"] },
+//   source_nodes: ["DataLoader"],
+//   node_meta: {
+//     DataLoader: { class_name: "TaskExecutor", execution_mode: "serial", max_workers: 1 },
+//     Processor:  { class_name: "TaskExecutor", execution_mode: "thread", max_workers: 4 },
+//     Router:     { class_name: "TaskRouter",   execution_mode: "serial", max_workers: 1 },
+//   },
+//   analysis: null,
+// }
 
 // 获取节点 ID 和形状
 // getNodeId("DataLoader") → "DataLoader"
-// getNodeShape(mockStructure.nodes["Router"]) → "rhombus"
+// getNodeShape("TaskRouter") → "rhombus"
 
 // 渲染结构图（带节点状态着色）
 // renderMermaidStructure(nodeStatuses);

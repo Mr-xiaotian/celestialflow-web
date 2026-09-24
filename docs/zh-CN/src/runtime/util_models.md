@@ -1,6 +1,6 @@
-# util_models
+# src/celestialflow_web/runtime/util_models.py
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
 ## 作用
 
@@ -8,16 +8,18 @@
 
 ## 模型列表
 
-### StructureModel
+### GraphMetaModel
 
-任务结构数据模型，表示任务图的结构信息。各字段独立扁平化存储，不再使用嵌套 `structure` 字典。
+图元信息数据模型，合并承载图结构（节点 / 边 / 源节点）、节点构建期元信息（`node_meta`）以及图分析结果（`analysis`）。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `graph_id` | `str` | `""` | 图实例标识，用于 Reporter 端 graph 上下文校验 |
-| `nodes` | `dict[str, dict[str, Any]]` | `{}` | 节点字典，键为节点名，值为节点属性字典 |
+| `nodes` | `list[str]` | `[]` | 节点名称列表 |
 | `edges` | `dict[str, list[str]]` | `{}` | 边字典，键为源节点名，值为目标节点名列表 |
 | `source_nodes` | `list[str]` | `[]` | 源节点（入口节点）名称列表 |
+| `node_meta` | `dict[str, dict[str, Any]]` | `{}` | 节点构建期元信息字典，键为节点名 |
+| `analysis` | `dict[str, Any] \| None` | `None` | 图分析结果字典 |
 
 ### StatusModel
 
@@ -37,15 +39,6 @@
 |------|------|------|
 | `graph_id` | `str` | 图实例标识，默认 `""` |
 | `errors` | `list[dict[str, Any]]` | 错误记录列表，每项为错误字典；直接写入 SQLite 数据库 |
-
-### AnalysisModel
-
-任务分析数据模型。
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `graph_id` | `str` | 图实例标识，默认 `""` |
-| `analysis` | `dict[str, Any]` | 分析结果字典 |
 
 ### TaskInjectionModel
 

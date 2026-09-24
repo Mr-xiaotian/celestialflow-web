@@ -1,55 +1,39 @@
-# dashboard_analysis.ts
+# src/celestialflow_web/static/ts/dashboard_analysis.ts
 
-> 📅 最后更新日期: 2026/08/18
+> 📅 最后更新日期: 2026/09/24
 
-管理图分析信息的加载与分析面板的渲染。提供对 TaskGraph 拓扑结构的深度洞察，如 DAG 检测、层级分析、图模式等。
+渲染"图分析信息"卡片，展示任务图拓扑结构的深度洞察（结构类型、DAG 检测、图模式、层级数量等）。
+
+> 分析结果随图元信息一次性到达（`graphMeta.analysis`），由 `loaders.ts` 维护；本文件只读不拉，也没有独立的请求/版本号逻辑。
 
 ## 类型定义
 
-```typescript
-type AnalysisData = {
-  name: string;                    // 任务图名称
-  startTime: number;               // 任务图启动时间戳
-  className: string;               // 图结构分类名称（Python 类名）
-  isDAG: boolean;                  // 当前任务图是否为 DAG
-  graphMode: string;               // 图级执行模式名称（serial / thread / async）
-  layersDict: Record<string, unknown>; // 层级分析结果，键数量用于统计层数
-};
-```
+分析结果 `AnalysisData`（定义见 [`types.d.ts`](types.d.md)）：
 
-## 全局变量
-
-| 变量 | 类型 | 说明 |
+| 字段 | 类型 | 说明 |
 |------|------|------|
-| `analysisData` | `AnalysisData \| null` | 拓扑分析数据；未加载时为 `null` |
-| `analysisRev` | `number` | 数据版本号，初始化 `-1`，用于增量拉取 |
-| `analysisRequestSeq` | `number` | 请求序列号，防止旧分析响应覆盖新结果 |
+| `name` | `string` | 任务图名称 |
+| `startTime` | `number` | 任务图启动时间戳 |
+| `className` | `string` | 图结构分类名称 |
+| `isDAG` | `boolean` | 当前任务图是否为 DAG |
+| `graphMode` | `string` | 图级执行模式名称（serial / thread / async） |
+| `layersDict` | `Record<string, unknown>` | 层级分析结果，键数量用于统计层数 |
 
 ## 函数
 
-### `loadAnalysis()`
+### `renderAnalysisInfo(): void`
 
-异步从 `GET /api/pull_analysis?known_rev=N` 拉取分析数据。
-
-- **竞态保护**: 每次调用分配递增 `analysisRequestSeq`，响应回来时若序列号不匹配则丢弃。
-- **增量机制**: 后端仅在 `known_rev` 过期时返回完整数据（`body.data !== null`），否则返回 `rev` 与空数据。
-- **返回值**: `Promise<boolean>` — 分析版本发生变化并成功更新时返回 `true`。
-
----
-
-### `renderAnalysisInfo()`
-
-将分析数据渲染到 `#analysis-info` 容器。若 `analysisData` 为 `null`，则显示国际化空态占位文案。
+读取 `graphMeta.analysis` 并渲染到 `#analysis-info` 容器；`analysis` 为 `null` 时显示国际化空态占位（`analysis.noData`）。
 
 **展示字段：**
 
 | 显示标签 (i18n key) | 对应字段 | 说明 |
 |---------|---------|------|
 | `analysis.graphName` | `name` | 任务图名称 |
-| `analysis.startTime` | `startTime` | 图启动时间戳（`> 0` 时格式化，否则显示 `-`） |
-| `analysis.structType` | `className` | TaskGraph 具体的 Python 类名，带提示气泡 |
-| `analysis.isDAG` | `isDAG` | `true` 时显示绿色 `.ok` 类，`false` 时显示红色 `.warn` 类 |
 | `analysis.graphMode` | `graphMode` | 图级执行模式，带提示气泡 |
+| `analysis.startTime` | `startTime` | 图启动时间戳（`> 0` 时格式化，否则显示 `-`） |
+| `analysis.structType` | `className` | 图结构分类名称，带提示气泡 |
+| `analysis.isDAG` | `isDAG` | `true` 时显示绿色 `.ok` 类，`false` 时显示红色 `.warn` 类 |
 | `analysis.layerCount` | `layersDict` | 通过 `Object.keys(layersDict).length` 推导层级总数 |
 
 ## 数据流
@@ -57,41 +41,35 @@ type AnalysisData = {
 ```mermaid
 sequenceDiagram
     participant Main as main.ts<br/>refreshAll()
+    participant Loaders as loaders.ts
     participant Analysis as dashboard_analysis.ts
-    participant API as /api/pull_analysis
+    participant API as /api/pull_graph_meta
     participant DOM as #analysis-info
 
-    Main->>Analysis: loadAnalysis()
-    Analysis->>API: GET ?known_rev=N
-    API-->>Analysis: { rev, data: AnalysisData|null }
-    alt data !== null
-        Analysis->>Analysis: 更新 analysisData / analysisRev
-        Analysis-->>Main: true
-        Main->>Analysis: renderAnalysisInfo()
-        Analysis->>DOM: 渲染分析信息卡片
-    else data === null
-        Analysis-->>Main: false (无变化)
-    end
+    Main->>Loaders: loadGraphMeta()
+    Loaders->>API: GET ?known_rev=N
+    API-->>Loaders: { rev, data: GraphMeta|null }
+    Loaders-->>Main: graphMetaChanged?
+    Main->>Analysis: renderAnalysisInfo()
+    Analysis->>DOM: 读取 graphMeta.analysis 渲染分析卡片
 ```
 
 ## 使用示例
 
 ```typescript
-// 模拟从后端获取的分析数据
-const mockAnalysis: AnalysisData = {
-  name: "MyTaskGraph",
-  startTime: 1718000000,
-  className: "TaskGraph",
-  isDAG: true,
-  graphMode: "thread",
-  layersDict: { "0": ["StageA"], "1": ["StageB", "StageC"] },
-};
+// graphMeta.analysis 由 loaders.ts 的 loadGraphMeta() 从图元信息中解出：
+// {
+//   name: "MyTaskGraph",
+//   startTime: 1718000000,
+//   className: "TaskGraph",
+//   isDAG: true,
+//   graphMode: "thread",
+//   layersDict: { "0": ["StageA"], "1": ["StageB", "StageC"] },
+// }
 
-// loadAnalysis() 拉取并更新全局变量
-// const changed = await loadAnalysis();
-// if (changed) renderAnalysisInfo();
+// 由 refreshAll() 在 graphMetaChanged 时调用：
+renderAnalysisInfo();
 
-// renderAnalysisInfo() 将其渲染到 #analysis-info
-// 若 analysisData === null → 显示空态占位
-// 否则渲染：图名称、启动时间、结构类型、是否DAG、图模式、层级数量
+// 若 graphMeta.analysis === null → 显示空态占位
+// 否则渲染：图名称、图模式、启动时间、结构类型、是否 DAG、层级数量
 ```

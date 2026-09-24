@@ -1,6 +1,6 @@
-# index.html
+# src/celestialflow_web/templates/index.html
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
 Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
 
@@ -29,7 +29,7 @@ Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
 | `partials/tab_injection.html` | 任务注入 tab：节点浏览、当前节点编辑、待发送数据预览、提交与状态消息 |
 | `partials/modal_layout_editor.html` | 仪表盘卡片布局编辑弹窗（`#layout-editor-overlay`） |
 | `partials/modal_error_columns_editor.html` | 错误表格字段编辑弹窗（`#errors-columns-editor-overlay`） |
-| `partials/scripts.html` | 编译产物的 JS 脚本加载顺序（见下） |
+| `partials/scripts.html` | 以原生 ESM 方式引入唯一入口 `js/main.js`（见下） |
 
 ## Header 控制栏
 
@@ -74,15 +74,26 @@ Web UI 的 Jinja2 模板文件，定义了监控系统的完整页面结构。
 | SortableJS | `@latest` | 仪表盘布局与错误表格字段的拖拽排序 |
 | Mermaid | `^10`（ESM） | 任务图可视化渲染 |
 
-## JS 脚本加载顺序
+## JS 模块加载
 
-脚本按依赖关系顺序加载（详见 `partials/scripts.html`）：
+前端使用原生 ESM，`partials/scripts.html` 只引入唯一入口 `js/main.js`，其余模块由其静态 `import` 串联：
+
+```html
+<script
+    type="module"
+    src="{{ request.url_for('static', path='js/main.js') }}"
+></script>
+```
+
+入口的 import 顺序决定模块求值顺序：
 
 ```html
 i18n.js               ← 国际化支持
 utils.js              ← 通用工具函数
 web_config.js         ← 配置管理逻辑 + 卡片 DOM 注入（模块加载时调用 ensureAllCards）
-dashboard_statuses.js ← 节点状态管理
+loaders.js            ← 数据层：状态/图元信息拉取与本地派生
+util_estimators.js    ← 图级派生指标估算
+dashboard_statuses.js ← 节点状态卡渲染
 dashboard_structure.js← 结构图渲染
 errors.js             ← 错误日志分页 + 字段编辑器
 dashboard_analysis.js ← 拓扑分析展示
@@ -90,11 +101,11 @@ dashboard_error_types.js ← 错误类型分布卡片
 dashboard_summary.js  ← 汇总统计
 dashboard_history.js  ← 历史图表
 injection.js          ← 任务注入逻辑
-main.js               ← 全局入口与轮询协调
 layout_editor.js      ← 卡片布局编辑器（依赖 web_config 的 CARD_TEMPLATES、PANEL_SELECTOR_MAP 及 applyDashboardLayout）
+main.js               ← 全局入口与轮询协调
 ```
 
-> 注意：上述 `web_config.js` 中模块加载时会立即调用 `ensureAllCards()`，把全部卡片 DOM 提前注入到 `#card-pool`，保证 `main.js` 中 `renderMermaidStructure()` 等函数能通过 `getElementById` 找到对应节点。
+> 注意：`web_config.js` 在模块加载时会立即调用 `ensureAllCards()`，把全部卡片 DOM 提前注入到 `#card-pool`。因此入口必须最先 import 它，保证后续 `dashboard_*` 模块顶层的 `getElementById` 能找到对应节点；`tests/test_server.py` 通过模块求值顺序测试校验这一约束。所有编译产物都必须能从 `main.js` 出发经 `import` 到达。
 
 ## CSS 样式引用
 
@@ -107,6 +118,7 @@ css/dashboard_analysis.css   ← 分析卡片专属样式
 css/dashboard_statuses.css   ← 节点卡片专属样式
 css/dashboard_summary.css    ← 汇总面板专属样式
 css/dashboard_history.css    ← 历史图专属样式
+css/dashboard_error_types.css ← 错误类型分布卡片专属样式
 css/errors.css              ← 错误日志页样式
 css/injection_layout.css     ← 注入页布局样式
 css/injection_nodes.css      ← 注入页节点列表样式

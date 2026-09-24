@@ -1,6 +1,6 @@
-# server 包入口
+# src/celestialflow_web/server/__init__.py
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/09/24
 
 ## 作用
 

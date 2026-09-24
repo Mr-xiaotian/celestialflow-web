@@ -1,6 +1,6 @@
-# dashboard.css
+# src/celestialflow_web/static/css/dashboard.css
 
-> 📅 最后更新日期: 2026/06/28
+> 📅 最后更新日期: 2026/09/24
 
 负责仪表盘页面的核心三栏布局架构。
 

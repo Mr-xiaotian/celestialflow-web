@@ -1,6 +1,6 @@
-# Web 路由组装入口
+# src/celestialflow_web/routes/__init__.py
 
-> 📅 最后更新日期: 2026/07/14
+> 📅 最后更新日期: 2026/09/24
 
 ## 作用
 

@@ -1,6 +1,6 @@
-# web_config.ts
+# src/celestialflow_web/static/ts/web_config.ts
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
 管理 Web 前端的配置加载、归一化、保存和应用。配置采用**分组结构**（`global`、`dashboard`、`errors`、`injection`），同时兼容旧版扁平格式的自动迁移。
 
@@ -18,7 +18,7 @@ type WebGlobalConfig = {
 
 type WebDashboardConfig = {
   historyLimit: number;
-  showStructureEdgeDelta: boolean;
+  structureEdgeLabel: StructureEdgeLabel;
   useTotalPendingInStatus: boolean;
   layout: DashboardLayout;
 };
@@ -52,12 +52,15 @@ type LegacyWebConfig = {
   language?: Lang;
   historyLimit?: number;
   showStructureEdgeDelta?: boolean;
+  structureEdgeLabel?: StructureEdgeLabel;
   useTotalPendingInStatus?: boolean;
   errorPageSize?: number;
   errorSortOrder?: "newest" | "oldest";
   dashboard?: Partial<DashboardLayout>;
 };
 ```
+
+> 迁移规则：旧扁平格式的 `showStructureEdgeDelta === true` 会映射为 `structureEdgeLabel: "delta"`，`false` 映射为 `"none"`。
 
 ## 全局变量
 
@@ -66,8 +69,8 @@ type LegacyWebConfig = {
 | `webConfig` | `WebConfig` | 当前运行时的配置对象，模块加载时由 `DEFAULT_WEB_CONFIG` 初始化 |
 | `saveConfigPending` | `boolean` | 是否还有新的配置变更等待落盘 |
 | `saveConfigPromise` | `Promise<boolean> \| null` | 当前正在执行的保存队列 Promise |
-| `DEFAULT_WEB_CONFIG` | `WebConfig` | 默认配置模板，用于初始化和降级兜底 |
-| `DEFAULT_ERROR_COLUMNS` | `ErrorColumnKey[]` | 错误日志表格的默认字段顺序，与 `DEFAULT_WEB_CONFIG.errors.columns` 保持一致 |
+| `DEFAULT_WEB_CONFIG` | `WebConfig` | 默认配置模板，用于初始化和降级兜底（错误表格默认字段顺序即 `DEFAULT_WEB_CONFIG.errors.columns`） |
+| `refreshRate` | `number` | 轮询刷新间隔（毫秒），为 `global.refreshInterval` 的归一化值，由 `setRefreshRate()` 更新 |
 | `PANEL_SELECTOR_MAP` | `Record<DashboardColumnKey, string>` | 面板键到 CSS 选择器的映射（`left` → `.left-panel` 等） |
 | `CARD_TEMPLATES` | `Record<string, string>` | 卡片 ID 到 HTML 模板的映射（`mermaid`、`analysis`、`status`、`progress`、`error-types`、`summary`） |
 | `CARD_META` | `Record<string, string>` | 卡片 ID 到 i18n 标签键的映射（含 `error-types`） |
@@ -116,7 +119,13 @@ type LegacyWebConfig = {
 
 ### `normalizeErrorColumns(rawColumns?: ErrorColumnKey[] | null): ErrorColumnKey[]`
 
-去重并仅保留 `DEFAULT_ERROR_COLUMNS` 支持的错误表格字段顺序。返回的数组可直接作为 `webConfig.errors.columns` 写入。
+去重并仅保留 `DEFAULT_WEB_CONFIG.errors.columns` 支持的错误表格字段顺序。返回的数组可直接作为 `webConfig.errors.columns` 写入。
+
+---
+
+### `normalizeStructureEdgeLabel(value: unknown): StructureEdgeLabel`
+
+归一化结构图边标签显示模式，只接受 `"none"` / `"delta"` / `"cumulative"`，其他值回退到 `"none"`。
 
 ---
 
@@ -126,7 +135,7 @@ type LegacyWebConfig = {
 
 1. **语言**: 应用 `global.language` 并更新全页 `data-i18n` 元素。
 2. **主题**: 根据 `global.theme` 切换 `dark-theme` 类。
-3. **参数同步**: 将刷新率、历史长度、每页条数、增量开关等同步到对应的 DOM 控件。
+3. **参数同步**: 将刷新率、历史长度、每页条数、结构图边标签模式、节点等待模式与注入页过滤开关等同步到对应的 DOM 控件。
 4. **错误表格字段**: 读取 `errors.columns`（已通过 `normalizeErrorColumns` 归一化），调用 `renderErrorsTableHeader()` 重绘表头。
 5. **布局**: 调用 `applyDashboardLayout()` 重排卡片。
 
@@ -154,7 +163,7 @@ const DEFAULT_WEB_CONFIG: WebConfig = {
   },
   dashboard: {
     historyLimit: 20,
-    showStructureEdgeDelta: false,
+    structureEdgeLabel: "none",
     useTotalPendingInStatus: false,
     layout: {
       left: ["mermaid", "analysis"],

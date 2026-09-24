@@ -1,6 +1,6 @@
-# injection.ts
+# src/celestialflow_web/static/ts/injection.ts
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 任务手动注入模块。采用**单节点编辑 + 批量提交**的草稿式架构：每个节点维护独立 JSON 草稿，最终统一发送为 `{ node_name: [tasklist] }` 结构。终止符注入是独立的网络操作，**不会**与任务草稿混在一起。
 
@@ -25,7 +25,6 @@ type ValidationState = "success" | "error" | "neutral";
 | 函数 | 签名 | 说明 |
 |------|------|------|
 | `setLocalizedMessageMeta` | `(element, messageKey, args = []) => void` | 在元素上记录翻译键与占位参数 |
-| `clearLocalizedMessageMeta` | `(element) => void` | 清除元素上的翻译元信息 |
 | `getLocalizedMessageArgs` | `(element) => string[]` | 读取并解析缓存的占位参数 |
 
 ## 状态提示辅助函数
@@ -130,10 +129,6 @@ type ValidationState = "success" | "error" | "neutral";
 ### `setValidationMessage(messageKey: string, state: ValidationState, args: string[] = []): void`
 
 在 `#json-validation` 区域显示校验提示，并缓存翻译键供语言切换后重绘。
-
-### `clearValidationMessage(): void`
-
-清空校验提示区域。
 
 ### `validateCurrentDraft(showSyntaxError = true): boolean`
 

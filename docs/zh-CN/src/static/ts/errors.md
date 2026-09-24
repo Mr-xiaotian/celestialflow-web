@@ -1,20 +1,18 @@
-# errors.ts
+# src/celestialflow_web/static/ts/errors.ts
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 错误日志分页与过滤模块。负责错误记录的异步拉取、前端分页逻辑、按节点/关键词搜索的过滤展示，以及表格字段顺序的运行时编辑（`#errors-columns-editor-overlay`）。
 
 ## 类型定义
 
+`ErrorData`、`ErrorsPullResponse`、`ErrorColumnKey` 等契约类型统一声明于 [`types.d.ts`](types.d.md)。本模块内部还定义了字段元信息类型：
+
 ```typescript
-type ErrorData = {
-  ts: number;            // 生命周期时间戳，单位为秒
-  stage: string;         // 错误发生的节点/阶段名称，用于节点筛选
-  event_id: number;      // 失败事件的唯一标识 ID，全局唯一
-  error_type: string;    // 错误的分类类型
-  error_message: string; // 错误的具体描述信息
-  task_json: unknown;    // 触发该错误的任务数据，用于展示与重试回填
-  result_json: unknown;  // 成功结果或失败时的占位结果
+type ErrorColumnMeta = {
+  labelKey: string;         // 列标题对应的国际化 key
+  headerClassName?: string; // 表头额外样式类
+  cellClassName?: string;   // 单元格额外样式类
 };
 ```
 
@@ -32,7 +30,6 @@ type ErrorData = {
 | `errorsRequestSeq` | `number` | 请求序列号，防止旧响应覆盖新结果 |
 | `originalErrorColumns` | `ErrorColumnKey[]` | 打开字段编辑器时的字段快照 |
 | `errorColumnSortableInstances` | `Partial<Record<..., SortableInstance>>` | 字段编辑器拖拽实例缓存 |
-| `DEFAULT_VISIBLE_ERROR_COLUMNS` | `ErrorColumnKey[]` | 错误表格默认字段顺序，亦作为允许的列白名单 |
 | `ERROR_COLUMN_META` | `Record<ErrorColumnKey, ErrorColumnMeta>` | 每个字段的 i18n key 与单元格/表头类名 |
 | `ALL_ERROR_COLUMN_IDS` | `ErrorColumnKey[]` | 字段编辑器可选的全部字段 key |
 | `ERROR_COLUMNS_ZONE_IDS` | `readonly [...]` | 字段编辑器中"已显示/未显示"两个 dropzone 的 ID 列表 |
@@ -72,7 +69,7 @@ type ErrorData = {
 
 将 `errors` 数组渲染到表格中。每行包含错误序号、事件 ID、错误信息、节点、任务数据、发生时间和重试按钮。
 
-- 当 `task_json` 可解析且不是以 `<` 开头的字符串时，显示可点击的“任务注入”重试链接。
+- 当 `task_json !== undefined` 时显示可点击的“任务注入”重试链接，否则显示不可用的“格式未知”占位。
 - 重试点击调用 `preloadInjectionDraftFromError(stage, task_json, webConfig.errors.jumpToInjectionAfterRetry)`。
 - 无记录时显示空态占位。
 
@@ -94,14 +91,14 @@ type ErrorData = {
 
 ### 字段编辑器（运行时配置错误表格字段顺序与显隐）
 
-- `getActiveErrorColumns()`: 直接读取 `webConfig.errors.columns`。
-- `normalizeConfiguredErrorColumns(rawColumns)`: 以 `DEFAULT_VISIBLE_ERROR_COLUMNS` 为白名单去重并过滤非法字段。
-- `renderErrorColumnsEditor(visibleColumns?)`: 按当前/默认顺序渲染“已显示”和“未显示”两个 dropzone，并初始化 SortableJS。
+- `getActiveErrorColumns()`: 读取 `webConfig.errors.columns` 并交由 `web_config.normalizeErrorColumns()` 归一化。
+- `normalizeErrorColumns(rawColumns)`（来自 `web_config.ts`）: 以默认字段列表为白名单去重并过滤非法字段。
+- `renderErrorColumnsEditor(visibleColumns)`: 按给定顺序渲染“已显示”和“未显示”两个 dropzone，并初始化 SortableJS。
 - `openErrorColumnsEditor()` / `closeErrorColumnsEditor(restore = true)`: 打开/关闭字段编辑器；关闭且 `restore=true` 时回滚到 `originalErrorColumns` 快照。
 - `initErrorColumnSortable()` / `destroyErrorColumnSortable()`: 创建/销毁 dropzone 上的 SortableJS 实例（共用 `errors-columns` 分组）。
 - `syncErrorColumnsFromEditor()`: 把当前 dropzone 顺序写回 `webConfig.errors.columns`。
 - `saveErrorColumns()`: 写回顺序并调用 `saveWebConfig()` 持久化；保存成功后关闭编辑器。
-- `resetErrorColumns()`: 将 `webConfig.errors.columns` 重置为 `DEFAULT_VISIBLE_ERROR_COLUMNS` 拷贝。
+- `resetErrorColumns()`: 将 `webConfig.errors.columns` 重置为 `DEFAULT_WEB_CONFIG.errors.columns` 拷贝。
 - `renderErrorsTableHeader()`: 按当前字段顺序重绘 `<thead>` 行；会被 `applyConfig()` 和 `closeErrorColumnsEditor(restore=true)` 共同调用。
 
 ## 事件绑定

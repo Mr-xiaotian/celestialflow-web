@@ -1,69 +1,43 @@
-# dashboard_statuses.ts
+# src/celestialflow_web/static/ts/dashboard_statuses.ts
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
-管理各节点运行状态数据的加载、同步与仪表盘状态卡片的动态渲染。提供运行时间彩色分段渲染能力。
+渲染仪表盘中间的节点状态卡片：读取 `loaders.ts` 暴露的节点状态快照与图级派生值，展示成功/等待/错误/重复等指标、执行模式与并发数，以及运行时间彩色分段。
+
+> 本模块只读数据、不发起网络请求。`nodeStatuses`、`lastNodeStatuses`、`nodeEstimates`、`lastNodeEstimates`、`graphMeta` 均由 `loaders.ts` 维护；图级剩余时间就地由 `util_estimators.ts` 的 `calcRemaining()` 推算。
 
 ## 类型定义
 
 ```typescript
-type NodeStatus = {
-  status: number;              // 状态码：0-未运行, 1-运行中, 2-已停止
-  tasks_processed: number;     // 已处理任务总数
-  tasks_pending: number;       // 队列中等待的任务数
-  tasks_succeeded: number;     // 成功处理的任务数
-  tasks_failed: number;        // 处理失败的任务数
-  tasks_duplicated: number;    // 被去重过滤的任务数
-  execution_mode: string;      // 运行模式（serial/thread/async）
-  max_workers: number;         // 最大并发数
-  start_time: number;          // 启动 Unix 时间戳
-  elapsed_time: number;        // 已运行秒数
-  remaining_time: number;      // 预计剩余秒数（当前链路）
-  total_tasks_pending: number; // 总待处理任务数（含下游链路）
-  total_remaining_time: number;// 预计总剩余秒数（考虑各条链路状态）
-  task_avg_time: string;       // 平均每个任务耗时文本
-};
-
 type ElapsedSegment = {
   className: string; // 对应的颜色 CSS 类名
   count: number;     // 该类型任务数量
 };
 ```
 
-## 全局变量
+> `NodeStatus` 的字段定义见 [`types.d.ts`](types.d.md)，`NodeEstimate` 的定义见 [`loaders.ts`](loaders.md)。
 
-| 变量 | 类型 | 说明 |
-|------|------|------|
-| `nodeStatuses` | `Record<string, NodeStatus>` | 所有节点的当前状态快照 |
-| `lastNodeStatuses` | `Record<string, NodeStatus>` | 上一轮状态快照，用于计算增量显示 |
-| `statusRev` | `number` | 上次拉取的版本号，初始化 `-1`，用于增量拉取 |
-| `statusesRequestSeq` | `number` | 请求序列号，防止旧状态响应覆盖新结果 |
+## DOM 元素引用
 
-## 结构联动函数
-
-### `getNodeFuncName(nodeName: string): string`
-
-从全局 `structureData.nodes` 中读取节点的 `func_name`，用于在状态卡中补充展示函数名。若结构数据尚未加载，则返回 `"-"` 占位。
+| 变量 | DOM ID | 说明 |
+|------|--------|------|
+| `dashboardGrid` | `#dashboard-grid` | 节点状态卡片网格容器 |
 
 ## 配置驱动函数
 
-以下函数根据 `webConfig.dashboard.useTotalPendingInStatus` 开关动态切换节点状态卡中"等待任务数"和"剩余时间"的数据来源。
+以下函数根据 `webConfig.dashboard.useTotalPendingInStatus` 开关动态切换状态卡中"等待任务数"和"剩余时间"的数据来源。
 
-### `getStatusPendingField(): "tasks_pending" | "total_tasks_pending"`
+### `getDisplayPending(status: NodeStatus, estimate?: NodeEstimate): number`
 
-返回当前状态卡应采用的等待值字段。当配置启用 `useTotalPendingInStatus` 时返回 `"total_tasks_pending"`（含下游链路总等待），否则返回 `"tasks_pending"`（仅当前节点队列）。
+开启总等待模式时返回图级估算的 `estimate.total_tasks_pending`；否则返回节点自身的 `status.tasks_pending`。图元信息就绪前 `estimate` 可能缺失，此时按 0 处理。
 
-### `getDisplayPending(status: NodeStatus): number`
+### `getDisplayRemainingTime(status: NodeStatus, estimate?: NodeEstimate): number`
 
-根据当前配置从状态快照中提取等待任务数。
-
-### `getDisplayRemainingTime(status: NodeStatus): number`
-
-根据当前配置从状态快照中提取剩余时间。启用总等待模式时使用 `total_remaining_time`。
+开启总等待模式时返回 `estimate.total_remaining_time`；否则调用 `calcRemaining(tasks_processed, tasks_pending, elapsed_time)` 基于本节点计数就地推算。
 
 ### `getPendingLabelHtml(): string`
 
-返回等待标签及提示气泡的 HTML，根据配置模式切换国际化键（`status.pending` vs `status.pendingGlobal`）。
+返回等待标签及提示气泡的 HTML，按配置在 `status.pending` / `status.pendingGlobal` 两组国际化键之间切换。
 
 ---
 
@@ -102,30 +76,18 @@ type ElapsedSegment = {
 
 ## 核心函数
 
-### `loadStatuses(): Promise<boolean>`
-
-异步从 `GET /api/pull_status?known_rev=N` 拉取节点状态。
-
-- **竞态保护**: 使用 `statusesRequestSeq` 丢弃过时响应。
-- **状态快照保存**: 成功后保存上一轮状态到 `lastNodeStatuses`。
-- **历史联动**: 成功后调用 `appendStatusSnapshotToHistory()` 同步更新前端本地历史序列。
-- **返回值**: 状态版本发生变化并成功更新时返回 `true`。
-
----
-
 ### `renderDashboard(): void`
 
 遍历 `nodeStatuses` 为每个节点生成状态卡片。
 
 **卡片渲染特性：**
 
-- **实时增量**: 对比 `lastNodeStatuses` 自动计算成功/失败/等待/重复任务的增量并彩色显示。
-- **状态标记**: 卡片左侧边框颜色反映节点状态（蓝色=运行中 `status-running`，灰色=已停止 `status-stopped`）。
-- **字段同步**: 状态卡只依赖后端当前仍会上报的字段，不再展示已从 reporter 移除的 `stage_mode`。
-- **结构联动**: 卡片会结合 `dashboard_structure.ts` 提供的结构数据，额外展示当前节点绑定的函数名 `func_name`。
+- **实时增量**: 对比 `lastNodeStatuses` / `lastNodeEstimates` 计算成功/等待/失败/重复任务的增量并彩色显示（等待增量基于 `getDisplayPending()` 的值）。
+- **状态标记**: 卡片类名反映节点状态（`status-running` = 运行中，`status-stopped` = 已停止，否则为普通卡片）。
+- **构建期元信息**: 执行模式与并发数取自 `graphMeta.node_meta[node]`（`execution_mode` / `max_workers`）；`serial` 模式或元信息缺失时并发数显示 `-`。
 - **运行时间彩色分段**: 调用 `formatElapsedDuration()` 为 `elapsed_time` 生成基于任务成功/失败/重复比例染色的 HTML。
 - **四段式进度条**: 直观展示成功（绿）、错误（红）、重复（黄）、等待（灰）的比例。
-- **时间预估**: 显示已运行时间、预计剩余时间、平均任务耗时和进度百分比。
+- **时间预估**: 显示已运行时间、预计剩余时间、平均任务耗时和完成进度百分比。
 - **交互跳转**: 点击卡片中的错误数（`.error-clickable`），自动跳转至"错误日志"标签页并预设该节点过滤器。
 
 ## 卡片样式类
@@ -156,18 +118,22 @@ flowchart LR
 ## 使用示例
 
 ```typescript
-// 构造一个完整的 NodeStatus 对象
+// 构造一个节点状态对象（字段与 /api/pull_status payload 一致）
 const nodeStatus: NodeStatus = {
   status: 1,
-  tasks_processed: 250, tasks_succeeded: 240,
-  tasks_failed: 5, tasks_duplicated: 5,
-  tasks_pending: 30, total_tasks_pending: 50,
-  execution_mode: "thread",
-  max_workers: 4,
-  start_time: 1745400000, elapsed_time: 3600,
-  remaining_time: 600, total_remaining_time: 1200,
-  task_avg_time: "1.44s/it",
+  tasks_processed: 250,
+  tasks_succeeded: 240,
+  tasks_failed: 5,
+  tasks_duplicated: 5,
+  tasks_pending: 30,
+  upstream_counts: {},
+  downstream_counts: {},
+  start_time: 1745400000,
+  elapsed_time: 3600,
 };
+
+// 本轮图级派生值（由 loaders.ts 的 refreshNodeEstimates() 计算）
+const estimate = { total_tasks_pending: 50, total_remaining_time: 1200 };
 
 // 计算运行时间彩色分段
 const coloredDuration = formatElapsedDuration(
@@ -179,6 +145,6 @@ const coloredDuration = formatElapsedDuration(
 // 返回带颜色 span 的 HTML 字符串
 
 // 根据配置获取展示值
-// getDisplayPending(nodeStatus) → 30 或 50
-// getDisplayRemainingTime(nodeStatus) → 600 或 1200
+// getDisplayPending(nodeStatus, estimate) → 30 或 50
+// getDisplayRemainingTime(nodeStatus, estimate) → 就地推算 或 1200
 ```

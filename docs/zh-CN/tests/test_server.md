@@ -1,6 +1,6 @@
-# Web 服务 API 测试 (test_server.py)
+# tests/test_server.py
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 ## 作用
 
@@ -17,17 +17,22 @@
 
 ### 静态资源渲染
 - `test_index_page`: 验证首页 `/` 能正确返回包含 `dashboard` 容器的 HTML 页面。
+- `test_entry_module_reaches_every_built_artifact`: 验证首页只引用一个 ESM 入口 `main.js`，且该入口按 import 图能到达全部编译产物，避免出现无人 import 的死模块。
+- `test_card_injecting_module_evaluates_before_dashboards`: 验证 `web_config` 在模块求值顺序上先于各 `dashboard_*` 模块（卡片 DOM 注入先于依赖它的 `getElementById`）。
 
 ### 配置拉取
 - `test_config_api`: 验证前端所需的运行时参数（刷新频率、主题等）能被正确获取。
 
 ### 服务端状态
-- `test_server_state_api`: 验证 reporter 拉取的服务端同步状态，包括轮询间隔、当前图标识、结构/分析状态、失败事件水位线。
+- `test_server_state_api`: 验证 reporter 拉取的服务端同步状态，包括轮询间隔、当前图标识、图元信息就绪状态（`has_graph_meta`）、失败事件水位线。
 
 ### 状态同步 (Rev 机制)
 - `test_status_push_pull`:
   - 验证 `push_status` 能成功保存快照。
   - 验证 `pull_status` 支持增量更新：当 `known_rev` 与服务器当前版本一致时，返回空数据以节省带宽。
+
+### 图元信息同步
+- `test_graph_meta_push_pull`: 验证 `push_graph_meta` / `pull_graph_meta` 能完整保留图结构、节点构建期元信息与分析结果，并在 `known_rev` 命中时不重复下发。
 
 ### 任务注入
 - `test_task_injection`: 验证通过 POST 接口注入的任务能被正确暂存，并由调度器通过 GET 接口消费，消费后被清空。
@@ -59,10 +64,13 @@
 |----------|----------|
 | `test_store_snapshot_methods_return_isolated_copies` | 快照返回深拷贝 |
 | `test_index_page` | 首页 HTML 渲染 |
+| `test_entry_module_reaches_every_built_artifact` | ESM 入口可达全部编译产物 |
+| `test_card_injecting_module_evaluates_before_dashboards` | `web_config` 早于 dashboard 模块求值 |
 | `test_config_api` | `/api/pull_config` 配置拉取 |
 | `test_server_state_api` | `/api/pull_server_state` 服务端状态 |
 | `test_push_errors_meta_route_removed` | 旧端点已删除 |
 | `test_status_push_pull` | 状态推送与增量拉取 |
+| `test_graph_meta_push_pull` | 图元信息推送与增量拉取 |
 | `test_task_injection` | 任务与终止符注入、消费、清空 |
 | `test_task_injection_overwrites_tasklist_per_node` | 按节点覆盖 task list |
 | `test_task_injection_requires_tasklist_mapping` | 任务注入参数校验 |

@@ -1,6 +1,6 @@
-# dashboard_history.ts
+# src/celestialflow_web/static/ts/dashboard_history.ts
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 管理节点多指标历史数据的维护与折线图的初始化、重绘。历史数据完全在前端通过状态快照累积，不依赖独立的后端 API。
 
@@ -115,9 +115,9 @@ type ThemeColors = {
 
 根据 `currentHistoryMetric` 调用 `extractProgressData()` 将 `nodeHistories` 中的对应指标数据写入折线图并刷新。会同步 `legendItem.hidden` 确保图例渲染与 `hiddenNodes` 一致。
 
-### `appendStatusSnapshotToHistory(timestamp, statuses, previousStatuses?): boolean`
+### `appendStatusSnapshotToHistory(timestamp, statuses, estimates, previousStatuses = {}): boolean`
 
-核心逻辑：根据最新状态快照追加历史点。
+核心逻辑：根据最新状态快照追加历史点。`estimates` 为与 `statuses` 同轮的图级派生值（用于记录 `total_tasks_pending`），`previousStatuses` 用于识别节点重启。
 
 - **重置检测**：若节点 `start_time` 变化（重启）或 `tasks_processed` 回退（回滚），则清空该节点历史。
 - **去重**：若时间戳相同则更新最后一个点，否则追加新点。
@@ -166,7 +166,7 @@ initHistoryMetricSwitcher(); // 模块级立即执行
 
 ```mermaid
 flowchart LR
-    subgraph "dashboard_statuses.ts"
+    subgraph "loaders.ts"
         LS[loadStatuses]
     end
     subgraph "dashboard_history.ts"

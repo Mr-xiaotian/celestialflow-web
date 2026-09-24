@@ -1,6 +1,6 @@
-# Pull 路由（GET）— `core_pull`
+# src/celestialflow_web/routes/core_pull.py
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 ## 作用
 
@@ -10,7 +10,7 @@
 
 ### `register(router: APIRouter, server: TaskWebServer) -> None`
 
-在给定的 `APIRouter` 上注册全部 8 个 GET 端点。
+在给定的 `APIRouter` 上注册全部 7 个 GET 端点。
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -29,7 +29,7 @@
 |------|------|--------|------|
 | `graph_id` | `str` | `""` | Reporter 当前任务图实例的唯一标识 |
 
-**返回：** `dict[str, Any]` — 包含 `interval`、`is_current_graph`、`has_structure`、`has_analysis`、`max_event_id_in_fail`。
+**返回：** `dict[str, Any]` — 包含 `interval`、`is_current_graph`、`has_graph_meta`、`max_event_id_in_fail`。
 
 ### 2. `GET /api/pull_injection`
 
@@ -49,9 +49,9 @@
 
 **返回：** `{"rev": int, "timestamp": float, "data": dict | None}`
 
-### 5. `GET /api/pull_structure`
+### 5. `GET /api/pull_graph_meta`
 
-获取图结构数据，支持 rev 守卫。
+获取图元信息（图结构 + 节点构建期元信息 + 图分析结果），支持 rev 守卫。
 
 **返回：** `{"rev": int, "data": dict | None}`
 
@@ -81,14 +81,7 @@ flowchart LR
     D -->|否| F[data = page_items]
 ```
 
-### 7. `GET /api/pull_analysis`
-
-获取图拓扑分析结果。
-
-**返回：** `{"rev": int, "data": dict | None}`  
-当当前 graph 还没有分析结果时，`data` 为 `None`。
-
-### 8. `GET /api/pull_error_type_counts`
+### 7. `GET /api/pull_error_type_counts`
 
 按错误类型聚合统计结果，支持按节点过滤，也支持 rev 守卫。
 
@@ -100,7 +93,6 @@ flowchart LR
 
 - 查询参数归一化由 `runtime.util_cal.normalize_errors_query()` 处理。
 - `pull_injection` 具有副作用，会在读取后清空任务与终止符缓存。
-- `pull_analysis` 当前实现不检查 `known_rev`，即使调用方传入版本号也始终返回最新分析数据。
 
 ## 使用示例
 

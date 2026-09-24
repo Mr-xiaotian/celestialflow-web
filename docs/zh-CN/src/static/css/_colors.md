@@ -1,6 +1,6 @@
-# _colors.css
+# src/celestialflow_web/static/css/_colors.css
 
-> 📅 最后更新日期: 2026/05/23
+> 📅 最后更新日期: 2026/09/24
 
 定义了 Web UI 使用的全局色彩系统变量，基于 CSS Variables (`:root`) 实现，方便统一管理和主题切换。
 

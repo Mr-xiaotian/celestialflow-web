@@ -1,6 +1,6 @@
-# errors.css
+# src/celestialflow_web/static/css/errors.css
 
-> 📅 最后更新日期: 2026/06/28
+> 📅 最后更新日期: 2026/09/24
 
 负责“错误日志”页签下的搜索框、筛选器、数据表格及分页控件的样式定义。
 

@@ -1,20 +1,12 @@
-# dashboard_error_types.ts
+# src/celestialflow_web/static/ts/dashboard_error_types.ts
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/09/24
 
 错误类型分布卡片模块。负责按节点筛选的错误类型聚合数据拉取、doughnut 图渲染以及图例展示。
 
 ## 数据类型
 
-```typescript
-type ErrorTypeCount = {
-  error_type: string; // 错误类型名称
-  count: number;      // 该类型的错误条数
-};
-
-type ErrorTypeCountsPullResponse = ApiVersionedResponse<ErrorTypeCount[]>;
-// 错误类型聚合 API 响应，遵循通用版本化响应格式
-```
+`ErrorTypeCount`、`ErrorTypeCountsPullResponse` 声明于 [`types.d.ts`](types.d.md)（后者为 `ApiVersionedResponse<ErrorTypeCount[]>`，遵循通用版本化响应格式）。
 
 ## 全局变量
 
@@ -151,7 +143,8 @@ flowchart LR
 | `main.ts` / `refreshAll()` | 直接调用 | 每轮刷新周期调用 `loadErrorTypeCounts()`，若返回 `true` 则调用 `renderErrorTypeChart()` |
 | `i18n.ts` | `t()` | 使用 `errorTypes.*` 系列键获取国际化文案 |
 | `utils.ts` | `escapeHtml()` | 图例渲染时对错误类型标签做 HTML 转义 |
-| `globals.d.ts` | 类型声明 | 使用 `ErrorTypeCount`、`ErrorTypeCountsPullResponse`、`ChartInstance` 等全局类型 |
+| `types.d.ts` | 类型声明 | 使用 `ErrorTypeCount`、`ErrorTypeCountsPullResponse` 等契约类型 |
+| `globals.d.ts` | 类型声明 | 使用 `ChartInstance` 等外部库类型 |
 | `dashboard_statuses.ts` | 传入 `NodeStatus` | `populateErrorTypeNodeFilter()` 接收节点状态快照来填充筛选器 |
 
 ## 使用示例

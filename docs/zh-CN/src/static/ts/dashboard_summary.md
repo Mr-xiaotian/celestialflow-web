@@ -1,14 +1,8 @@
-# dashboard_summary.ts
+# src/celestialflow_web/static/ts/dashboard_summary.ts
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
-管理全局汇总统计数据的渲染。**汇总完全由前端基于 `nodeStatuses` 实时聚合计算**，不依赖独立的后端 API。
-
-## 全局变量
-
-| 变量 | 类型 | 说明 |
-|------|------|------|
-| `summaryRev` | `number` | 数据版本号（当前保留但未使用增量拉取逻辑） |
+渲染"总体状态摘要"面板。**汇总完全由前端基于 `loaders.ts` 暴露的 `nodeStatuses` 与 `nodeEstimates` 聚合计算**，不依赖独立的后端 API，也不维护版本号。
 
 ## DOM 元素引用
 
@@ -25,7 +19,7 @@
 
 ### `renderSummary(): void`
 
-基于 `nodeStatuses`（全局变量，由 `dashboard_statuses.ts` 维护）的最新快照，前端聚合计算各项总量并渲染到汇总面板。
+基于 `nodeStatuses` 的最新快照聚合各项总量并渲染到汇总面板；图级剩余时间取自 `nodeEstimates`。
 
 **前端聚合项：**
 
@@ -35,22 +29,23 @@
 | 总等待任务 | `sum(status.tasks_pending)` | `formatLargeNumber()` |
 | 总失败任务 | `sum(status.tasks_failed)` | `formatLargeNumber()` |
 | 总重复任务 | `sum(status.tasks_duplicated)` | `formatLargeNumber()` |
-| 活动节点数 | `count(status === 1)` | `formatLargeNumber()` |
-| 总剩余时间 | `max(status.total_remaining_time)` | `formatDuration()` |
+| 活动节点数 | `count(status.status === 1)` | `formatLargeNumber()` |
+| 总剩余时间 | `max(estimate.total_remaining_time)`（来自 `nodeEstimates`） | `formatDuration()` |
 
-> 图级剩余时间取自各节点 `total_remaining_time` 的最大值（考虑各条链路的估算），而非简单求和。
+> 图级剩余时间取自各节点派生估算 `total_remaining_time` 的最大值（考虑各条链路的估算），而非简单求和。
 
 **交互特性：**
 
-- 当总失败数 `> 0` 时，`#total-failed` 元素被添加 `.error-clickable` 类并绑定 `onclick` 调用 `switchToErrorsTab()`，点击可跳转至错误日志页。
+- 当总失败数 `> 0` 时，`#total-failed` 元素被添加 `.error-clickable` 类并绑定 `onclick` 调用 `switchToErrorsTab()`，点击可跳转至错误日志页；为 0 时移除该类与事件。
 
 ## 数据流
 
 ```mermaid
 flowchart LR
-    subgraph "dashboard_statuses.ts"
-        LS[loadStatuses]
+    subgraph "loaders.ts"
+        LS[loadStatuses/loadGraphMeta]
         NS[nodeStatuses]
+        NE[nodeEstimates]
     end
     subgraph "dashboard_summary.ts"
         RS[renderSummary]
@@ -65,7 +60,9 @@ flowchart LR
     end
 
     LS --> NS
+    LS --> NE
     NS --> RS
+    NE --> RS
     RS --> TSF
     RS --> TPF
     RS --> TFF
@@ -87,7 +84,10 @@ const total_pending   = statusList.reduce((sum, s) => sum + (s.tasks_pending || 
 const total_failed    = statusList.reduce((sum, s) => sum + (s.tasks_failed || 0), 0);
 const total_duplicated = statusList.reduce((sum, s) => sum + (s.tasks_duplicated || 0), 0);
 const total_nodes     = statusList.reduce((sum, s) => sum + (s.status === 1 ? 1 : 0), 0);
-const total_remain    = Math.max(...statusList.map(s => s.total_remaining_time || 0), 0);
+const total_remain    = Math.max(
+  ...Object.values(nodeEstimates).map((e) => e.total_remaining_time),
+  0,
+);
 
 // 更新 DOM
 totalSucceeded.innerHTML = formatLargeNumber(total_succeeded);

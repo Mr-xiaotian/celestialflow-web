@@ -1,6 +1,6 @@
-# Push 路由（POST）— `core_push`
+# src/celestialflow_web/routes/core_push.py
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/09/24
 
 ## 作用
 
@@ -10,7 +10,7 @@
 
 ### `register(router: APIRouter, server: TaskWebServer, config_path: str) -> None`
 
-在给定的 `APIRouter` 上注册全部 7 个 POST 端点。
+在给定的 `APIRouter` 上注册全部 6 个 POST 端点。
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -56,22 +56,15 @@ flowchart LR
 - 采用集合语义，重复节点会自动去重
 - 失败时返回 `JSONResponse({"ok": False, "msg": ...}, 500)`
 
-### 4. `POST /api/push_structure`
+### 4. `POST /api/push_graph_meta`
 
-Reporter 推送图结构快照。
+Reporter 推送图元信息（图结构 + 节点构建期元信息 + 图分析结果）。
 
-- 仅当 `graph_id` 与当前 graph 上下文一致时才写入
-- 成功写入后递增 `store_revs["structure"]`
+- 仅当 `graph_id` 与当前 graph 上下文一致时才写入，否则返回 409
+- 图结构、节点元信息与分析结果同属构建期冻结信息，随首次 push 一并到达，合并为单次原子写入
+- 成功写入后递增 `store_revs["graph_meta"]`
 
-### 5. `POST /api/push_analysis`
-
-Reporter 推送图分析结果。
-
-- 校验 `graph_id`
-- 写入 `analysis_store`
-- 递增 `store_revs["analysis"]`
-
-### 6. `POST /api/push_status`
+### 5. `POST /api/push_status`
 
 Reporter 推送节点状态快照。
 
@@ -79,7 +72,7 @@ Reporter 推送节点状态快照。
 - 更新 `status_timestamp` 与 `status_store`
 - 递增 `store_revs["status"]`
 
-### 7. `POST /api/push_errors`
+### 6. `POST /api/push_errors`
 
 Reporter 推送错误记录列表。
 

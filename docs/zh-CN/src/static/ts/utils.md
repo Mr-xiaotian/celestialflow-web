@@ -1,6 +1,6 @@
-# utils.ts
+# src/celestialflow_web/static/ts/utils.ts
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
 包含 Web 前端通用的格式化工具、UI 辅助逻辑、DOM 操作封装及环境检测函数。
 
@@ -20,8 +20,8 @@
 ### `formatTimestamp(timestamp: number): string`
 将 Unix 时间戳（秒）格式化为 `YYYY-MM-DD HH:MM:SS` 本地时间字符串。
 
-### `calcRemainTime(processed: number, pending: number, elapsed: number): number`
-根据已处理数、待处理数和已消耗时间线性估算剩余时间。当 `processed` 或 `pending` 为 0 时返回 0。
+### `formatAvgTime(elapsed: number, processed: number): string`
+格式化平均任务耗时：`elapsed / processed >= 1` 时返回形如 `"1.44s/it"`，否则返回形如 `"8.00it/s"`；缺少样本（`elapsed` 或 `processed` 为 0）时返回 `"N/A"`。
 
 ### `format_repr(obj: unknown, max_length: number): string`
 将任意对象格式化为字符串，超过 `max_length` 时截断（前 2/3 + `...` + 后 1/3），保留换行与反斜杠的可见形式。
@@ -41,7 +41,7 @@
 ### `renderLabelWithTooltip(labelKey: string, tooltipKey: string): string`
 渲染带提示气泡的标签 HTML。包含一个 `i` 按钮（`.tooltip-trigger`），悬停或聚焦时显示翻译后的提示文案（`.tooltip-bubble`）。
 
-> 此函数被 `dashboard_statuses.ts` 和 `dashboard_analysis.ts` 广泛使用，用于为节点 `func_name`（函数名）、`execution_mode`（运行模式）、`graph_mode`（图模式）、`total_tasks_pending`（全局等待）等专业术语提供即时解释。
+> 此函数被 `dashboard_statuses.ts` 和 `dashboard_analysis.ts` 广泛使用，用于为 `execution_mode`（运行模式）、`parallelism`（并发数）、`graphMode`（图模式）、`total_tasks_pending`（全局等待）等专业术语提供即时解释。
 
 ---
 
@@ -50,8 +50,8 @@
 ### `escapeHtml(str: string): string`
 基础的 HTML 转义函数，防止动态插入文本时的 XSS 风险。转义字符：`&` `<` `>` `"` `'` `/`。
 
-### `isMobile(): boolean`
-基于 UserAgent 的简单移动端检测（匹配 `Mobi|Android|iPhone|iPad|iPod`）。
+### `isMobile(): boolean`（模块内部）
+基于 UserAgent 的简单移动端检测（匹配 `Mobi|Android|iPhone|iPad|iPod`）。未导出，仅供 `utils.ts` 内部使用。
 
 ---
 
@@ -63,8 +63,7 @@
 |------|---------|------|
 | `toggleDarkTheme()` | **main.ts** | 明暗主题切换 |
 | `showSettingsSaveStatus()` | **main.ts** | 设置保存状态提示 |
-
-> 旧版文档提及的 `renderLocalTime()` 在源码中不存在，可能为旧版遗留或从未实现。
+| `calcRemaining()` | **util_estimators.ts** | 基于已处理/待处理/已消耗时间估算剩余时间（旧名 `calcRemainTime`） |
 
 ---
 
@@ -77,13 +76,13 @@ flowchart LR
         B[formatWithDelta]
         C[formatDuration]
         D[formatTimestamp]
-        E[calcRemainTime]
+        E[formatAvgTime]
         F[format_repr]
         G[switchToErrorsTab]
         H[switchToInjectionTab]
         I[renderLabelWithTooltip]
         J[escapeHtml]
-        K[isMobile]
+        K[isMobile<br/>内部]
     end
 ```
 
@@ -102,8 +101,9 @@ formatWithDelta(1000, 5, "text-delta-success", "text-delta-success");
 formatDuration(3661);           // "01:01:01"
 formatTimestamp(1745400000);    // "2026-04-23 14:40:00"
 
-// ====== 剩余时间估算 ======
-calcRemainTime(500, 100, 300);  // 60
+// ====== 平均耗时 ======
+formatAvgTime(3600, 2500);      // "1.44s/it"
+formatAvgTime(0, 0);            // "N/A"
 
 // ====== 字符串截断 ======
 format_repr("very long string...", 10);  // "very lo...g..."

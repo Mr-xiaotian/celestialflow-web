@@ -1,14 +1,15 @@
-# main.ts
+# src/celestialflow_web/static/ts/main.ts
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
-仪表盘主入口脚本，负责协调全局初始化、事件监听及核心数据轮询逻辑。
+仪表盘主入口脚本，负责协调全局初始化、事件监听、设置面板交互与核心数据轮询逻辑。
+
+> `refreshRate` 由 `web_config.ts` 维护（仅该模块导出，`main.ts` 导入使用）；本文件负责把设置面板的下拉值写入 `setRefreshRate()`。
 
 ## 全局变量
 
 | 变量 | 类型 | 说明 |
 |------|------|------|
-| `refreshRate` | `number` | 轮询刷新间隔（毫秒），默认 `5000` |
 | `refreshIntervalId` | `ReturnType<typeof setInterval> \| null` | 轮询定时器 ID |
 | `settingsStatusTimer` | `ReturnType<typeof setTimeout> \| null` | 设置保存状态提示自动隐藏定时器 |
 
@@ -25,7 +26,7 @@
 | `languageSelect` | `#language-select` | 语言选择下拉框 |
 | `errorPageSizeSelect` | `#error-page-size` | 错误每页条数下拉框 |
 | `errorJumpToInjectionToggle` | `#error-jump-to-injection-toggle` | 错误页重注入后跳转开关 |
-| `structureEdgeDeltaToggle` | `#structure-edge-delta` | 结构图边增量显示开关 |
+| `structureEdgeLabelSelect` | `#structure-edge-label` | 结构图边标签显示模式下拉框（none / delta / cumulative） |
 | `statusTotalPendingToggle` | `#status-total-pending-toggle` | 节点状态卡等待值模式开关 |
 | `injectableOnlyToggle` | `#injectable-only-toggle` | 注入页"仅显示可注入节点"开关 |
 | `tabButtons` | `.tab-btn` | 页签按钮列表 |
@@ -41,32 +42,40 @@
 
 ### 轮询刷新 (`refreshAll`)
 
-并行发起 5 个异步请求：`loadStatuses()`、`loadStructure()`、`loadErrors()`、`loadAnalysis()`、`loadErrorTypeCounts()`。根据各模块返回的变更标志，按需触发 DOM 渲染。
+每轮并行发起 4 个异步拉取：`loadStatuses()`、`loadGraphMeta()`、`loadErrors()`、`loadErrorTypeCounts()`，再按各模块返回的变更标志按需渲染。图级派生指标由前端本地估算，必须在图元信息就绪后、渲染之前统一收口。
+
+- `statusesChanged || graphMetaChanged` → `refreshNodeEstimates()`
+- `statusesChanged` → `appendStatusSnapshotToHistory()`（依赖上一步算出的 `nodeEstimates`）
+- `statusesChanged || graphMetaChanged` → `renderMermaidStructure()`
+- `graphMetaChanged` → `renderAnalysisInfo()`
+- `statusesChanged` → `renderDashboard()` / `populateNodeFilter()` / `populateErrorTypeNodeFilter()` / `renderInjectionPage()` / `updateChartData()` / `renderSummary()`
+- `errorsChanged` → `renderErrors()`
+- `errorTypeCountsChanged` → `renderErrorTypeChart()`
 
 ```mermaid
 flowchart TD
     RA[refreshAll] --> LS[loadStatuses]
-    RA --> LST[loadStructure]
+    RA --> LGM[loadGraphMeta]
     RA --> LE[loadErrors]
-    RA --> LA[loadAnalysis]
     RA --> LET[loadErrorTypeCounts]
 
-    LS -->|statusesChanged| RD[renderDashboard]
-    LS -->|statusesChanged| PN[populateNodeFilter]
-    LS -->|statusesChanged| PN2[populateErrorTypeNodeFilter]
-    LS -->|statusesChanged| RI[renderInjectionPage]
-    LS -->|statusesChanged| UC[updateChartData]
-    LS -->|statusesChanged| RS[renderSummary]
-
-    LST -->|structureChanged| RM[renderMermaidStructure]
-    LS -->|statusesChanged| RM
-
-    LE -->|errorsChanged| RE[renderErrors]
-
-    LA -->|analysisChanged| RAI[renderAnalysisInfo]
-
-    LET -->|errorTypeCountsChanged| RET[renderErrorTypeChart]
+    LS --> EST[refreshNodeEstimates]
+    LGM --> EST
+    EST --> HIST[appendStatusSnapshotToHistory]
+    LS --> RM[renderMermaidStructure]
+    LGM --> RM
+    LGM --> RAI[renderAnalysisInfo]
+    LS --> RD[renderDashboard]
+    LS --> PN[populateNodeFilter]
+    LS --> PN2[populateErrorTypeNodeFilter]
+    LS --> RI[renderInjectionPage]
+    LS --> UC[updateChartData]
+    LS --> RS[renderSummary]
+    LE --> RE[renderErrors]
+    LET --> RET[renderErrorTypeChart]
 ```
+
+> 由于页面初始空态与切换语言共用同一套重绘序列，`rerenderAllViews()` 抽出统一的渲染调用；注入页因刷新粒度不同（整页重绘 / 仅文案重绘）单独处理。
 
 ### 设置交互
 
@@ -76,7 +85,7 @@ flowchart TD
 | **自动刷新** | `change` | 切换 `autoRefreshEnabled`，同步定时器，保存配置 |
 | **历史长度** | `change` | 更新 `historyLimit`，裁剪历史并重绘，保存配置 |
 | **界面语言** | `change` | `setLang()` + `applyI18nDOM()`，全量刷新所有卡片和图表 |
-| **结构图增量** | `change` | 切换 `showStructureEdgeDelta`，重绘 Mermaid，保存配置 |
+| **结构图边标签** | `change` | 切换 `structureEdgeLabel`（none/delta/cumulative），重绘 Mermaid，保存配置 |
 | **节点等待模式** | `change` | 切换 `useTotalPendingInStatus`，重绘节点卡，保存配置 |
 | **注入页节点过滤** | `change` | 切换 `showInjectableOnly`，刷新注入页，保存配置 |
 | **错误页大小** | `change` | 更新 `pageSize`，重新加载错误列表，保存配置 |
@@ -99,7 +108,6 @@ flowchart TD
 
 #### 设置面板管理
 `isSettingsPanelOpen()` / `openSettingsPanel()` / `closeSettingsPanel(options?)` / `toggleSettingsPanel()` — 管理设置面板的显隐与焦点归还。
-`updateSettingsStatusText()` — 语言切换后刷新设置保存状态提示文案。
 
 #### 页签管理
 `getActiveTab(): string` / `activateTab(button): void` / `updateCurrentPageSettings(): void` — 管理顶部页签切换和设置面板中"当前页专属设置"分组。
@@ -110,7 +118,7 @@ flowchart TD
 flowchart TD
     A["DOMContentLoaded"] --> B["loadWebConfig()"]
     B --> C["applyConfig()"]
-    C --> D["首次渲染（空态）"]
+    C --> D["rerenderAllViews() 空态"]
     C --> E["事件绑定"]
     D --> F["refreshAll()<br/>(首次)"]
     E --> G["syncAutoRefreshTimer()"]
@@ -118,9 +126,8 @@ flowchart TD
 
     H --> RA["refreshAll()"]
     RA --> I["loadStatuses()"]
-    RA --> J["loadStructure()"]
+    RA --> J["loadGraphMeta()"]
     RA --> K["loadErrors()"]
-    RA --> L["loadAnalysis()"]
     RA --> M["loadErrorTypeCounts()"]
 
     I --> N["statusesChanged?"]
@@ -130,14 +137,14 @@ flowchart TD
     N -->|true| R["renderSummary()"]
     N -->|true| P2["populateErrorTypeNodeFilter()"]
 
-    J --> S["structureChanged?"]
-    S -->|true| T["renderMermaidStructure()"]
+    J --> S["graphMetaChanged?"]
+    S -->|true| T["renderAnalysisInfo()"]
+
+    I --> RM["renderMermaidStructure()"]
+    J --> RM
 
     K --> U["errorsChanged?"]
     U -->|true| V["renderErrors()"]
-
-    L --> W["analysisChanged?"]
-    W -->|true| X["renderAnalysisInfo()"]
 
     M --> Y["errorTypeCountsChanged?"]
     Y -->|true| Z["renderErrorTypeChart()"]
@@ -150,7 +157,7 @@ flowchart TD
 // await refreshAll();
 
 // 修改轮询频率
-// refreshRate = 2000;
+// setRefreshRate(2000);
 // syncAutoRefreshTimer();
 
 // 主题切换

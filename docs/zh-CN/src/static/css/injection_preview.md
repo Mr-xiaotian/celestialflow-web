@@ -1,6 +1,6 @@
-# injection_preview.css
+# src/celestialflow_web/static/css/injection_preview.css
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/09/24
 
 负责任务注入页底部草稿预览区、提交按钮、状态消息和加载动画的样式定义。
 

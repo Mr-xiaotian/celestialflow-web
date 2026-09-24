@@ -1,6 +1,6 @@
-# Web 测试配置 (conftest.py)
+# tests/conftest.py
 
-> 📅 最后更新日期: 2026/09/01
+> 📅 最后更新日期: 2026/09/24
 
 ## 作用
 为 `tests/` 目录下的测试用例提供 Web 服务器和 HTTP 客户端的 Pytest Fixture，模拟真实的前后端交互环境。

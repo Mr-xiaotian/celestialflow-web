@@ -1,6 +1,6 @@
-# util_config
+# src/celestialflow_web/runtime/util_config.py
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 Web 模块的配置文件读写工具，负责 `config.json` 的持久化管理。无线程锁保护——线程安全由上层调用方（`routes/core_push.py` 的 `push_config` 路由，配合 `server.TaskWebServer.config_lock`）保证。
 

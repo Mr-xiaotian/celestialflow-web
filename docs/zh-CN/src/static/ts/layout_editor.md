@@ -1,6 +1,6 @@
-# 卡片布局编辑器 — `layout_editor`
+# src/celestialflow_web/static/ts/layout_editor.ts
 
-> 📅 最后更新日期: 2026/07/16
+> 📅 最后更新日期: 2026/09/24
 
 ## 作用
 
@@ -10,19 +10,23 @@
 
 ---
 
-## 核心常量
+## 全局常量与状态
 
-### `DEFAULT_LAYOUT`
+### `DEFAULT_WEB_CONFIG.dashboard.layout`（来自 `web_config.ts`）
 
-默认的三栏卡片布局配置，定义了系统出厂时的卡片分配方案：
+默认的三栏卡片布局配置，定义系统出厂时的卡片分配方案（`resetLayout()` 使用）：
 
 ```javascript
-const DEFAULT_LAYOUT = {
+{
   left:   ["mermaid", "analysis"],
   middle: ["status"],
   right:  ["progress", "error-types", "summary"],
-};
+}
 ```
+
+### `originalLayout`
+
+打开 layout 编辑器时保存的布局快照（`{ left, middle, right }`），用于关闭且 `restore=true` 时恢复未保存的拖拽修改。
 
 | 栏位 | 默认卡片 | 说明 |
 |------|----------|------|
@@ -62,15 +66,14 @@ const DEFAULT_LAYOUT = {
 **流程：**
 
 ```
-┌──────────────────────────────────┐
-│  1. 显示 overlay                 │
-│  2. 读取 webConfig.dashboard     │
-│     （不存在则用 DEFAULT_LAYOUT）│
-│  3. 保存一份副本到 originalLayout│
-│  4. 渲染左/中/右三栏             │
-│  5. 渲染未使用卡片池             │
-│  6. 调用 initSortable() 启用拖拽│
-└──────────────────────────────────┘
+┌───────────────────────────────────────┐
+│  1. 显示 overlay                      │
+│  2. 读取 webConfig.dashboard.layout   │
+│  3. 保存一份副本到 originalLayout     │
+│  4. 渲染左/中/右三栏                  │
+│  5. 渲染未使用卡片池                  │
+│  6. 调用 initSortable() 启用拖拽      │
+└───────────────────────────────────────┘
 ```
 
 未使用卡片池包含 `ALL_CARD_IDS` 中未被三栏引用的所有卡片。
@@ -86,7 +89,7 @@ const DEFAULT_LAYOUT = {
 | `restore` | `boolean` | `true` | 是否恢复原始布局。`true` 时撤销所有未保存的拖拽修改；`false` 时保留当前内存状态 |
 
 **行为：**
-- `restore=true`（默认）：用 `originalLayout` 覆盖 `webConfig.dashboard`，并调用 `applyConfig()` 刷新仪表盘。这是点击关闭按钮或点击遮罩时的行为。
+- `restore=true`（默认）：用 `originalLayout` 覆盖 `webConfig.dashboard.layout`，并调用 `applyConfig()` 刷新仪表盘。这是点击关闭按钮或点击遮罩时的行为。
 - `restore=false`：隐藏 overlay 但不恢复数据。这是保存成功后调用的行为。
 
 ---
@@ -115,6 +118,12 @@ const DEFAULT_LAYOUT = {
 
 ---
 
+### `destroySortableInstances(): void`
+
+在重绘拖拽区之前销毁当前挂载的全部 Sortable 实例，避免重复监听与实例泄漏。
+
+---
+
 ### `syncLayout()`
 
 将 DOM 中当前的三栏卡片顺序同步回 `webConfig.dashboard`。
@@ -122,7 +131,7 @@ const DEFAULT_LAYOUT = {
 **流程：**
 1. 遍历 `left`、`middle`、`right` 三个放置区
 2. 从每个区域的 `.layout-card` 元素读取 `data-card-id`
-3. 按顺序数组写入 `webConfig.dashboard`
+3. 按顺序数组写入 `webConfig.dashboard.layout`
 
 > 此函数**不持久化**，仅更新内存结构。持久化由 `saveLayout()` 调用。
 
@@ -150,11 +159,11 @@ const DEFAULT_LAYOUT = {
 
 ### `resetLayout()`
 
-将布局重置为 `DEFAULT_LAYOUT`。
+将布局重置为默认布局。
 
 **流程：**
 
-1. 将 `webConfig.dashboard` 重置为 `DEFAULT_LAYOUT` 的深拷贝
+1. 将 `webConfig.dashboard.layout` 重置为 `DEFAULT_WEB_CONFIG.dashboard.layout` 的深拷贝
 2. 清空并重新渲染左中右三栏（按默认卡片顺序）
 3. 清空并重新计算未使用卡片池
 4. 重新调用 `initSortable()` 绑定拖拽
@@ -210,12 +219,21 @@ const DEFAULT_LAYOUT = {
 
 ### 自定义默认布局
 
-修改 `DEFAULT_LAYOUT` 常量即可改变出厂布局：
+修改 `src/celestialflow_web/static/ts/web_config.ts` 中 `DEFAULT_WEB_CONFIG.dashboard.layout` 即可改变出厂布局：
 
 ```typescript
-const DEFAULT_LAYOUT = {
-  left:   ["mermaid", "analysis", "custom-card"],
-  middle: ["status", "errors"],
-  right:  ["progress"],
+const DEFAULT_WEB_CONFIG: WebConfig = {
+  // ...
+  dashboard: {
+    historyLimit: 20,
+    structureEdgeLabel: "none",
+    useTotalPendingInStatus: false,
+    layout: {
+      left:   ["mermaid", "analysis"],
+      middle: ["status"],
+      right:  ["progress", "error-types", "summary"],
+    },
+  },
+  // ...
 };
 ```

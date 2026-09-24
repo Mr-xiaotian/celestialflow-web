@@ -1,6 +1,6 @@
-# injection_nodes.css
+# src/celestialflow_web/static/css/injection_nodes.css
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/09/24
 
 负责任务注入页左侧节点浏览列表的样式定义，包括节点项、选中态、禁用态和"已编辑"标签。
 

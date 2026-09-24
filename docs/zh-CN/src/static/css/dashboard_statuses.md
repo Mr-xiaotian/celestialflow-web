@@ -1,10 +1,10 @@
-# dashboard_statuses.css
+# src/celestialflow_web/static/css/dashboard_statuses.css
 
-> 📅 最后更新日期: 2026/08/19
+> 📅 最后更新日期: 2026/09/24
 
 负责仪表盘节点状态卡片的布局与样式定义，包括统计网格、四段式进度条以及基于节点状态的动态边框色。
 
-> 注：节点函数名（`func_name`）字段取代了已移除的 `stage_mode`，由 `dashboard_statuses.ts` 通过 `.stat-value` 渲染，本 CSS 文件未引入新选择器。
+> 注：节点运行模式/并发等构建期元信息来自图元信息中的 `node_meta`，由 `dashboard_statuses.ts` 通过 `.stat-value` 渲染，本 CSS 文件未引入新选择器。
 
 
 ## 布局结构

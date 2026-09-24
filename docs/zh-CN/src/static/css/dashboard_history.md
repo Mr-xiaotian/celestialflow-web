@@ -1,6 +1,6 @@
-# dashboard_history.css
+# src/celestialflow_web/static/css/dashboard_history.css
 
-> 📅 最后更新日期: 2026/06/22
+> 📅 最后更新日期: 2026/09/24
 
 负责节点指标历史图（Chart.js）上方的控制区域样式，包括指标切换按钮组。
 
