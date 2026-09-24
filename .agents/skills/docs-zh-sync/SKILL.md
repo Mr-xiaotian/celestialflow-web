@@ -41,11 +41,24 @@ description: "Audits celestialflow-web code in src/celestialflow_web and tests, 
 | 4 | src/static/ts + templates | `subagent-static-ts-template.md` | `src/celestialflow_web/static/ts/*.ts`<br>`src/celestialflow_web/templates/*.html` |
 | 5 | tests | `subagent-tests.md` | `tests/*.py` |
 
+> 说明：子任务 4 的 templates 范围**仅限顶层** `templates/*.html`，`templates/partials/*.html` 不单独成文（见下方陷阱 3）。
+
 执行步骤：
 
-1. 用 `find_path` 或 `terminal` 扫描每个子任务对应的代码目录，生成该子任务的代码文件清单。
-2. 按项目路径映射规则（见 `_subagent-base.md`）推算每个代码文件对应的 `docs/zh-CN/` 目标文档路径。
-3. 同时扫描对应 `docs/zh-CN/` 目录，找出“有文档但无对应源码”的孤立文件，单独列出。
+1. 调用通用框架的扫描脚本 `scan_manifest.py`（用法见 `~/.agents/skills/docs-zh-sync/SKILL.md` 阶段 2）生成对照清单（Manifest）。
+2. 按项目路径映射规则（见 `_subagent-base.md`）核对代码→文档目标路径。
+3. 结合下方「工具已知陷阱」人工修正 manifest 分类，再按 5 个子任务拆分。
+
+#### ⚠️ 工具已知陷阱（必须遵守）
+
+`scan_manifest.py` 对本项目存在以下已知行为，主 agent 与子代理都必须按此口径处理，**不得盲从脚本输出**：
+
+1. **CSS / TS 区域的「孤立文档」全是假阳性，禁止删除。**
+   脚本反向映射 `.md` 时优先命中 `.py`，于是 `src/static/css`、`src/static/ts` 下每个文档都会被误报为「孤立文档 → 删除（无对应源码）」。实际上它们都有 1:1 的 `.css` / `.ts` 源码，必须保留并正常审计。
+2. **包根 `src/celestialflow_web/__init__.py` 不会出现在 manifest 中。**
+   脚本只接受「代码目录:文档目录」对，无法表达单个文件。子任务 2 必须由主 agent **手动补入** `src/celestialflow_web/__init__.py ↔ docs/zh-CN/src/__init__.md`，否则整轮漏审。
+3. **`templates/partials/*.html` 不作为独立镜像文档。**
+   约定只镜像顶层 `templates/*.html`；`partials/` 下 9 个子模板的职责集中记录在 `docs/zh-CN/src/templates/index.md`。脚本递归扫描会把它们列为「需新建」，属预期误报——**不要**为 partial 新建 `.md`，只需核对 `index.md` 对 partial 的描述与源码是否一致。
 
 ### 委派子代理
 

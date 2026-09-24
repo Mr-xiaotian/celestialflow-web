@@ -53,3 +53,4 @@
 - `static/js/` 为编译产物，默认不审计；前端文档以 `static/ts/` 与 `templates/` 为准。
 - `package.json`、`package-lock.json`、`tsconfig.json`、`config.json` 默认不镜像为中文文档。
 - 若源码文件发生重命名，例如 `pull_routes.py` → `core_pull.py`，应同步执行文档重命名，并检查其他文档中的交叉引用是否仍指向旧名称。
+- `scan_manifest.py` 对 `static/css`、`static/ts` 区域报出的「孤立文档」是反向映射假阳性，禁止据此删除文档；包根 `src/celestialflow_web/__init__.py` 不在 manifest 中，需手动纳入子任务 2 的清单。详见项目 `SKILL.md` 的「工具已知陷阱」。
