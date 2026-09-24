@@ -1,0 +1,136 @@
+---
+name: "docs-i18n-sync"
+description: "Syncs translations from docs/zh-CN (source of truth) to docs/en/ and docs/ja/ by mirrored structure. Invoke when zh-CN docs have been updated and English/Japanese translations need to follow."
+---
+
+# Docs I18n Sync（celestialflow-web 项目配置）
+
+本文件是 celestialflow-web 项目的 `docs-i18n-sync` 技能专属配置，引用通用框架 `~/.agents/skills/docs-i18n-sync/`。
+
+当用户提出以下需求时，立即调用本技能：
+
+- 同步、补全英文/日文文档
+- 依据 `docs/zh-CN` 更新 `docs/en/` / `docs/ja/`
+- 检查三语文档的一致性，修复翻译过期或缺失
+- 发现 en/ja 文档与 zh-CN 内容、结构不一致，要求按 zh-CN 现状修复
+
+## 通用框架
+
+本技能基于通用框架 `~/.agents/skills/docs-i18n-sync/SKILL.md`，该框架定义了：
+
+- 4 阶段执行流程（扫描与差异检测 → 委派子代理 → 汇总与交付 → 校验）
+- 通用翻译规则（`_subagent-base.md`）
+- 通用输出格式与降级策略
+- 跨平台扫描脚本 `scan_i18n_diff.py`（含重命名候选检测、`--batch-size` 分批建议）
+- 结构校验脚本 `validate_i18n_sync.py`（镜像完整性 / H1 镜像 / 围栏配对 / CJK 残留）
+
+主 agent 在执行时，应优先遵循通用框架的流程，并结合本文件的以下项目特化配置。
+
+---
+
+## 项目特化：源 / 目标语言
+
+| 角色 | 路径 | 日期行格式 |
+|------|------|-----------|
+| 源（唯一权威） | `docs/zh-CN/` | `> 📅 最后更新日期: YYYY/MM/DD` |
+| 目标 1 | `docs/en/` | `> 📅 Last Updated: YYYY/MM/DD` |
+| 目标 2 | `docs/ja/` | `> 📅 最終更新日: YYYY/MM/DD` |
+
+## 项目特化：扫描命令
+
+调用全局 `scan_i18n_diff.py` 生成翻译任务清单（Manifest）：
+
+```bash
+# 单行调用。$HOME 在 Bash 与 PowerShell 下均会自动展开为主目录（Windows 下为 %USERPROFILE%）。
+uv run python $HOME/.agents/skills/docs-i18n-sync/scan_i18n_diff.py --project-root . --source docs/zh-CN --targets en:docs/en ja:docs/ja --root-file README.md --batch-size 20 --output temp/i18n_manifest.md
+```
+
+> 注：`--rename-threshold` 默认 0.5，可按需调整。
+> `--batch-size 20` 生成每批 ≤ 20 个文件的确定性分批建议；`--output` 强制 UTF-8 落盘
+> （避免 PowerShell `>` 重定向写成 UTF-16/BOM）。
+
+## 项目特化：子任务划分
+
+EN 与 JA **天然并行**，可一次性并行委派 2 个子代理（每语言一个）。每个子代理的 FILES 清单中**不包含 SKIP 文件**（SKIP 由主 agent 自己从 Manifest 中过滤掉，传入子代理只会让 prompt 臃肿）。
+
+| # | 子任务 | TARGET_LANG | OUTPUT_DIR | DATE_LABEL |
+|---|--------|:-----------:|:----------:|:----------:|
+| 1 | EN 翻译 | `English` | `docs/en/` | `> 📅 Last Updated:` |
+| 2 | JA 翻译 | `日本語` | `docs/ja/` | `> 📅 最終更新日:` |
+
+**分批策略**（参考全局框架）：
+
+| 该语言待处理文件数 | 策略 |
+|:-----------------:|------|
+| ≤ 20 | 单代理处理整个语言 |
+| 21–60 | 按区域拆分，确保每批 ≤ 20 个文件 |
+| > 60 | 在上述基础上，将 `src/` 和 `tests/` 按子目录进一步拆分，确保每批 ≤ 20 个文件 |
+
+> **推荐**：扫描时加 `--batch-size 20`，直接采用脚本给出的确定性分批方案（会列出每批文件清单），无需临场判断。
+> 如果某批只有 SKIP 文件（无实际操作），可以省略该批。
+
+## 委派子代理
+
+每个子代理的消息中必须包含：
+
+- 目标语言参数（见上表）
+- 差异清单（来自 Manifest，仅保留该语言且非 SKIP 的动作）
+- 需要阅读的 Skill 文件路径：
+
+| 顺序 | 文件 | 说明 |
+|:----:|------|------|
+| 1 | `~/.agents/skills/docs-i18n-sync/_subagent-base.md` | 通用翻译规则、输出格式 |
+| 2 | 项目内 `.agents/skills/docs-i18n-sync/_subagent-base.md` | 项目特化路径映射 |
+
+> **退化策略**：如果当前环境限制子代理读取外部 Skill 目录，可临时将通用文件和项目文件合并写入项目内的临时文件（如 `temp/docs-i18n-sync/instructions-{lang}.md`），让子代理读取该临时文件，执行完毕后删除。
+
+### Manifest 使用约定
+
+主 agent 从脚本输出中读取每个语言区域的 6 类动作：
+
+- `NEW` / `UPDATE` / `MOVE` / `DELETE` → 传给对应子代理处理
+- `REVIEW` → 主 agent 自己人工核对（源无日期行，如根 `README.md`），不进入子代理 prompt
+- `SKIP` → 主 agent 自己消费，不进入子代理 prompt
+
+子代理无需理解"为什么是 SKIP/REVIEW"，只需要按 NEW/UPDATE/MOVE/DELETE 翻译即可。
+
+## 项目特化：目录结构
+
+`docs/zh-CN/` 下的文档镜像源码目录结构：
+
+| 源路径 (zh-CN) | 目标路径 (en/ja) |
+|----------------|-----------------|
+| `docs/zh-CN/src/...` | `docs/{en,ja}/src/...` |
+| `docs/zh-CN/tests/...` | `docs/{en,ja}/tests/...` |
+| `docs/zh-CN/*.md`（顶层） | `docs/{en,ja}/*.md`（顶层） |
+
+## 项目根 README 翻译（必须遵守）
+
+本项目根目录存在 `README.md`（中文为主，含 logo、Star History、License、Author 等），是面向用户的主入口文档。**必须**翻译到英文与日文。
+
+**映射方式**：通过 `scan_i18n_diff.py --root-file README.md` 把项目根的 `README.md` 视为源，翻译到 `docs/en/README.md` 与 `docs/ja/README.md`。
+
+**特殊说明**：
+
+- `docs/zh-CN/` 下**不放置** `README.md` 镜像（与本节约定的源在项目根保持一致）。
+- `docs/{en,ja}/README.md` 由本节规则生成，**不要**被「`docs/zh-CN/` 是唯一事实来源」误判为 DELETE——该文件的源不在 `docs/zh-CN/`，而在项目根。
+
+## 项目特化：H1 与校验
+
+- `docs-zh-sync` 已把 `docs/zh-CN/` 的 H1 全量改为**源码相对路径**（如 `# src/celestialflow_web/runtime/util_cal.py`），
+  并明确排除 `docs/en`、`docs/ja`。因此 en/ja 必须**逐字镜像**这类路径型 H1（总览类 README 除外）。
+- 阶段 4 校验命令：
+
+```bash
+uv run python $HOME/.agents/skills/docs-i18n-sync/validate_i18n_sync.py --project-root . --source docs/zh-CN --targets en:docs/en ja:docs/ja --root-file README.md
+```
+
+  期望退出码为 0（无缺失/多余、H1 一致、围栏配对、非代码区无 CJK 残留）。
+
+## 排除项
+
+除非用户明确要求，否则通常不处理：
+
+- `docs/zh-CN/` 本身（只读不写）。
+- 非 `.md` 文件（图片、二进制资源等）。
+- 由 `docs-zh-sync` 技能负责的"代码 → zh-CN 文档"同步任务。
