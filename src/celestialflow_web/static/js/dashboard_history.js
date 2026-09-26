@@ -9,7 +9,7 @@ const DELTA_SOURCE_METRIC = {
     delta_tasks_processed: "tasks_processed",
     delta_tasks_succeeded: "tasks_succeeded",
     delta_tasks_failed: "tasks_failed",
-    delta_tasks_duplicated: "tasks_duplicated",
+    delta_tasks_skipped: "tasks_skipped",
 };
 // 全局状态
 let nodeHistories = {}; // 各节点的处理进度历史
@@ -84,8 +84,8 @@ function getHistoryMetricLabelKey(metric) {
             return "chart.metric.succeeded";
         case "tasks_failed":
             return "chart.metric.failed";
-        case "tasks_duplicated":
-            return "chart.metric.duplicated";
+        case "tasks_skipped":
+            return "chart.metric.skipped";
         case "tasks_pending":
             return "chart.metric.pending";
         case "total_tasks_pending":
@@ -96,8 +96,8 @@ function getHistoryMetricLabelKey(metric) {
             return "chart.metric.deltaSucceeded";
         case "delta_tasks_failed":
             return "chart.metric.deltaFailed";
-        case "delta_tasks_duplicated":
-            return "chart.metric.deltaDuplicated";
+        case "delta_tasks_skipped":
+            return "chart.metric.deltaSkipped";
         case "tasks_processed":
         default:
             return "chart.metric.processed";
@@ -216,7 +216,7 @@ export function appendStatusSnapshotToHistory(timestamp, statuses, estimates, pr
             tasks_processed: status.tasks_processed || 0,
             tasks_succeeded: status.tasks_succeeded || 0,
             tasks_failed: status.tasks_failed || 0,
-            tasks_duplicated: status.tasks_duplicated || 0,
+            tasks_skipped: status.tasks_skipped || 0,
             tasks_pending: status.tasks_pending || 0,
             total_tasks_pending: estimates[node]?.total_tasks_pending || 0,
         };
@@ -232,7 +232,7 @@ export function appendStatusSnapshotToHistory(timestamp, statuses, estimates, pr
                 const pointChanged = currentLastPoint.tasks_processed !== nextPoint.tasks_processed ||
                     currentLastPoint.tasks_succeeded !== nextPoint.tasks_succeeded ||
                     currentLastPoint.tasks_failed !== nextPoint.tasks_failed ||
-                    currentLastPoint.tasks_duplicated !== nextPoint.tasks_duplicated ||
+                    currentLastPoint.tasks_skipped !== nextPoint.tasks_skipped ||
                     currentLastPoint.tasks_pending !== nextPoint.tasks_pending ||
                     currentLastPoint.total_tasks_pending !==
                         nextPoint.total_tasks_pending;

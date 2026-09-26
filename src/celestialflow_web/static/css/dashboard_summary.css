@@ -39,7 +39,7 @@
       }
     }
 
-    &.duplicate {
+    &.skip {
       background-color: var(--marigold-100);
 
       .dark-theme & {
@@ -93,7 +93,7 @@
       }
     }
 
-    &.duplicate {
+    &.skip {
       color: var(--marigold-600);
 
       .dark-theme & {

@@ -26,7 +26,7 @@ export type NodeStatus = {
   tasks_pending: number; // 队列中等待的任务数
   tasks_succeeded: number; // 成功处理的任务数
   tasks_failed: number; // 处理失败的任务数
-  tasks_duplicated: number; // 被去重过滤的任务数
+  tasks_skipped: number; // 被跳过而未执行的任务数
   upstream_counts: Record<string, number>; // 各上游节点传输给本节点的任务数量
   downstream_counts: Record<string, number>; // 本节点传输给各下游节点的任务数量
   start_time: number; // 启动 Unix 时间戳

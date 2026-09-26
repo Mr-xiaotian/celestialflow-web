@@ -576,7 +576,7 @@ select {
     color: var(--crimson-500);
 }
 /* 重复文本颜色 */
-.text-duplicate {
+.text-skip {
     color: var(--marigold-500);
 }
 /* 成功增量文本颜色 */
@@ -592,7 +592,7 @@ select {
     color: var(--crimson-300);
 }
 /* 重复增量文本颜色 */
-.text-delta-duplicate {
+.text-delta-skip {
     color: var(--marigold-300);
 }
 /* 小号字体 */

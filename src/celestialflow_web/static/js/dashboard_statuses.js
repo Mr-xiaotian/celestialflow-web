@@ -53,32 +53,32 @@ function getPendingLabelHtml() {
  * @param {number} seconds - 秒数
  * @param {number} successCount - 成功任务数
  * @param {number} failedCount - 失败任务数
- * @param {number} duplicateCount - 重复任务数
+ * @param {number} skipCount - 跳过任务数
  * @returns {string} 带颜色分段的时间 HTML
  */
-function formatElapsedDuration(seconds, successCount, failedCount, duplicateCount) {
+function formatElapsedDuration(seconds, successCount, failedCount, skipCount) {
     const duration = formatDuration(seconds);
     const digitCount = duration.replace(/:/g, "").length;
     if (!digitCount)
         return duration;
-    const segments = getElapsedSegments(successCount, failedCount, duplicateCount);
+    const segments = getElapsedSegments(successCount, failedCount, skipCount);
     if (!segments.length)
         return duration;
     const digitClasses = buildElapsedDigitClasses(segments, digitCount);
     return renderElapsedDurationHtml(duration, digitClasses, segments[0].className);
 }
 /**
- * 根据成功、失败、重复任务数生成有效的 elapsed 颜色段
+ * 根据成功、失败、跳过任务数生成有效的 elapsed 颜色段
  * @param {number} successCount - 成功任务数
  * @param {number} failedCount - 失败任务数
- * @param {number} duplicateCount - 重复任务数
+ * @param {number} skipCount - 跳过任务数
  * @returns {Array<{ className: string; count: number }>} 有效颜色段列表
  */
-function getElapsedSegments(successCount, failedCount, duplicateCount) {
+function getElapsedSegments(successCount, failedCount, skipCount) {
     return [
         { className: "elapsed-success", count: Math.max(0, successCount || 0) },
         { className: "elapsed-error", count: Math.max(0, failedCount || 0) },
-        { className: "elapsed-duplicate", count: Math.max(0, duplicateCount || 0) },
+        { className: "elapsed-skip", count: Math.max(0, skipCount || 0) },
     ].filter((segment) => segment.count > 0);
 }
 /**
@@ -160,7 +160,7 @@ export function renderDashboard() {
         const addSucceeded = data.tasks_succeeded - (last.tasks_succeeded || 0); // 成功数增量
         const addPending = displayPending - lastDisplayPending; // 等待数增量
         const addFailed = data.tasks_failed - (last.tasks_failed || 0); // 失败数增量
-        const addDuplicated = data.tasks_duplicated - (last.tasks_duplicated || 0); // 重复数增量
+        const addSkipped = data.tasks_skipped - (last.tasks_skipped || 0); // 跳过数增量
         const meta = graphMeta.node_meta[node]; // 构建期元信息随图元信息一次性拉取
         // 并行数量：serial 串行模式无并发概念，显示 "-"；元信息缺失时同样显示 "-"
         const parallelismText = !meta || meta.execution_mode === "serial" ? "-" : String(meta.max_workers);
@@ -170,7 +170,7 @@ export function renderDashboard() {
         // 计算四段进度条宽度百分比
         const pctSuccess = total === 0 ? 0 : (data.tasks_succeeded / total) * 100;
         const pctError = total === 0 ? 0 : (data.tasks_failed / total) * 100;
-        const pctDuplicate = total === 0 ? 0 : (data.tasks_duplicated / total) * 100;
+        const pctSkipped = total === 0 ? 0 : (data.tasks_skipped / total) * 100;
         const pctPending = total === 0 ? 0 : (displayPending / total) * 100;
         const card = document.createElement("div"); // 当前节点状态卡 DOM
         if (data.status === 1) {
@@ -190,7 +190,7 @@ export function renderDashboard() {
             <div><div class="stat-label">${t("status.succeeded")}</div><div class="stat-value text-success">${formatWithDelta(data.tasks_succeeded, addSucceeded, "text-delta-success", "text-delta-success")}</div></div>
             <div><div class="stat-label">${getPendingLabelHtml()}</div><div class="stat-value text-pending">${formatWithDelta(displayPending, addPending, "text-delta-pending", "text-delta-pending")}</div></div>
             <div><div class="stat-label">${t("status.error")}</div><div class="stat-value text-error error-clickable" data-node="${escapeHtml(node)}">${formatWithDelta(data.tasks_failed, addFailed, "text-delta-error", "text-delta-error")}</div></div>
-            <div><div class="stat-label">${t("status.duplicated")}</div><div class="stat-value text-duplicate">${formatWithDelta(data.tasks_duplicated, addDuplicated, "text-delta-duplicate", "text-delta-duplicate")}</div></div>
+            <div><div class="stat-label">${t("status.skipped")}</div><div class="stat-value text-skip">${formatWithDelta(data.tasks_skipped, addSkipped, "text-delta-skip", "text-delta-skip")}</div></div>
             <div><div class="stat-label">${renderLabelWithTooltip("status.executionMode", "status.executionModeHelp")}</div><div class="stat-value">${escapeHtml(meta?.execution_mode ?? "-")}</div></div>
             <div><div class="stat-label">${renderLabelWithTooltip("status.parallelism", "status.parallelismHelp")}</div><div class="stat-value">${escapeHtml(parallelismText)}</div></div>
           </div>
@@ -199,7 +199,7 @@ export function renderDashboard() {
             <div class="progress-header">
               <span>${t("status.completionRate")}</span>
               <span class="time-estimate">
-                <span class="elapsed">${formatElapsedDuration(data.elapsed_time, data.tasks_succeeded, data.tasks_failed, data.tasks_duplicated)}</span>
+                <span class="elapsed">${formatElapsedDuration(data.elapsed_time, data.tasks_succeeded, data.tasks_failed, data.tasks_skipped)}</span>
                 &lt;
                 <span class="remaining">${formatDuration(displayRemainingTime)}</span>,
                 <span class="task-avg-time">${formatAvgTime(data.elapsed_time, data.tasks_processed)}</span>,
@@ -209,7 +209,7 @@ export function renderDashboard() {
             <div class="progress-bar">
               <div class="progress-segment seg-success"   style="width: ${pctSuccess.toFixed(1)}%"></div>
               <div class="progress-segment seg-error"     style="width: ${pctError.toFixed(1)}%"></div>
-              <div class="progress-segment seg-duplicate" style="width: ${pctDuplicate.toFixed(1)}%"></div>
+              <div class="progress-segment seg-skip"      style="width: ${pctSkipped.toFixed(1)}%"></div>
               <div class="progress-segment seg-pending"   style="width: ${pctPending.toFixed(1)}%"></div>
             </div>
           </div>

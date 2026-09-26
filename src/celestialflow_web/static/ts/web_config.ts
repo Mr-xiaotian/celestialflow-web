@@ -258,9 +258,9 @@ const CARD_TEMPLATES: Record<string, string> = {
           <span class="dot" style="background: var(--crimson-500)"></span>
           <span class="label" data-i18n="chart.metric.failed">错误累计</span>
         </label>
-        <label class="metric-dot" data-history-metric="tasks_duplicated">
+        <label class="metric-dot" data-history-metric="tasks_skipped">
           <span class="dot" style="background: var(--marigold-500)"></span>
-          <span class="label" data-i18n="chart.metric.duplicated">重复累计</span>
+          <span class="label" data-i18n="chart.metric.skipped">跳过累计</span>
         </label>
         <span class="metric-sep" aria-hidden="true"></span>
         <label class="metric-dot" data-history-metric="tasks_pending">
@@ -284,9 +284,9 @@ const CARD_TEMPLATES: Record<string, string> = {
           <span class="dot delta" style="border-color: var(--crimson-500)"></span>
           <span class="label" data-i18n="chart.metric.deltaFailed">错误趋势</span>
         </label>
-        <label class="metric-dot" data-history-metric="delta_tasks_duplicated">
+        <label class="metric-dot" data-history-metric="delta_tasks_skipped">
           <span class="dot delta" style="border-color: var(--marigold-500)"></span>
-          <span class="label" data-i18n="chart.metric.deltaDuplicated">重复趋势</span>
+          <span class="label" data-i18n="chart.metric.deltaSkipped">跳过趋势</span>
         </label>
       </div>
     </div>`,
@@ -318,7 +318,7 @@ const CARD_TEMPLATES: Record<string, string> = {
         <div class="summary-item success"><div id="total-succeeded" class="summary-value success">0</div><div class="summary-label" data-i18n="summary.succeeded">总成功任务</div></div>
         <div class="summary-item pending"><div id="total-pending" class="summary-value pending">0</div><div class="summary-label" data-i18n="summary.pending">总等待任务</div></div>
         <div class="summary-item error"><div id="total-failed" class="summary-value error">0</div><div class="summary-label" data-i18n="summary.failed">总错误任务</div></div>
-        <div class="summary-item duplicate"><div id="total-duplicated" class="summary-value duplicate">0</div><div class="summary-label" data-i18n="summary.duplicated">总重复任务</div></div>
+        <div class="summary-item skip"><div id="total-skipped" class="summary-value skip">0</div><div class="summary-label" data-i18n="summary.skipped">总跳过任务</div></div>
         <div class="summary-item nodes"><div id="total-nodes" class="summary-value nodes">0</div><div class="summary-label" data-i18n="summary.nodes">活动节点</div></div>
         <div class="summary-item remain"><div id="total-remain" class="summary-value remain">00:00</div><div class="summary-label" data-i18n="summary.remain">总剩余时间</div></div>
       </div>

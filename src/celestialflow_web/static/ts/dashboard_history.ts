@@ -16,7 +16,7 @@ type DeltaMetricKey =
   | "delta_tasks_processed"
   | "delta_tasks_succeeded"
   | "delta_tasks_failed"
-  | "delta_tasks_duplicated";
+  | "delta_tasks_skipped";
 
 /** 历史图支持切换展示的指标字段键 */
 type HistoryMetricKey = CumulativeMetricKey | DeltaMetricKey;
@@ -26,7 +26,7 @@ const DELTA_SOURCE_METRIC: Record<DeltaMetricKey, CumulativeMetricKey> = {
   delta_tasks_processed: "tasks_processed",
   delta_tasks_succeeded: "tasks_succeeded",
   delta_tasks_failed: "tasks_failed",
-  delta_tasks_duplicated: "tasks_duplicated",
+  delta_tasks_skipped: "tasks_skipped",
 };
 
 /** 单个节点在某一时刻的历史采样点 */
@@ -35,7 +35,7 @@ type NodeHistoryPoint = {
   tasks_processed: number;
   tasks_succeeded: number;
   tasks_failed: number;
-  tasks_duplicated: number;
+  tasks_skipped: number;
   tasks_pending: number;
   total_tasks_pending: number;
 };
@@ -127,8 +127,8 @@ function getHistoryMetricLabelKey(metric: HistoryMetricKey): string {
       return "chart.metric.succeeded";
     case "tasks_failed":
       return "chart.metric.failed";
-    case "tasks_duplicated":
-      return "chart.metric.duplicated";
+    case "tasks_skipped":
+      return "chart.metric.skipped";
     case "tasks_pending":
       return "chart.metric.pending";
     case "total_tasks_pending":
@@ -139,8 +139,8 @@ function getHistoryMetricLabelKey(metric: HistoryMetricKey): string {
       return "chart.metric.deltaSucceeded";
     case "delta_tasks_failed":
       return "chart.metric.deltaFailed";
-    case "delta_tasks_duplicated":
-      return "chart.metric.deltaDuplicated";
+    case "delta_tasks_skipped":
+      return "chart.metric.deltaSkipped";
     case "tasks_processed":
     default:
       return "chart.metric.processed";
@@ -283,7 +283,7 @@ export function appendStatusSnapshotToHistory(
       tasks_processed: status.tasks_processed || 0,
       tasks_succeeded: status.tasks_succeeded || 0,
       tasks_failed: status.tasks_failed || 0,
-      tasks_duplicated: status.tasks_duplicated || 0,
+      tasks_skipped: status.tasks_skipped || 0,
       tasks_pending: status.tasks_pending || 0,
       total_tasks_pending: estimates[node]?.total_tasks_pending || 0,
     };
@@ -300,7 +300,7 @@ export function appendStatusSnapshotToHistory(
           currentLastPoint.tasks_processed !== nextPoint.tasks_processed ||
           currentLastPoint.tasks_succeeded !== nextPoint.tasks_succeeded ||
           currentLastPoint.tasks_failed !== nextPoint.tasks_failed ||
-          currentLastPoint.tasks_duplicated !== nextPoint.tasks_duplicated ||
+          currentLastPoint.tasks_skipped !== nextPoint.tasks_skipped ||
           currentLastPoint.tasks_pending !== nextPoint.tasks_pending ||
           currentLastPoint.total_tasks_pending !==
             nextPoint.total_tasks_pending;

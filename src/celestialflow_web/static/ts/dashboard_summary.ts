@@ -10,7 +10,7 @@ import { formatDuration, formatLargeNumber, switchToErrorsTab } from "./utils.js
 // DOM 元素引用（汇总面板）
 const totalSucceeded = document.getElementById("total-succeeded") as HTMLElement;
 const totalPending = document.getElementById("total-pending") as HTMLElement;
-const totalDuplicated = document.getElementById("total-duplicated") as HTMLElement;
+const totalSkipped = document.getElementById("total-skipped") as HTMLElement;
 const totalFailed = document.getElementById("total-failed") as HTMLElement;
 const totalNodes = document.getElementById("total-nodes") as HTMLElement;
 const totalRemain = document.getElementById("total-remain") as HTMLElement;
@@ -18,7 +18,7 @@ const totalRemain = document.getElementById("total-remain") as HTMLElement;
 
 /**
  * 渲染汇总数据面板
- * 基于已有节点状态聚合展示总成功数、等待数、失败数、重复数、活动节点数；
+ * 基于已有节点状态聚合展示总成功数、等待数、失败数、跳过数、活动节点数；
  * 图级剩余时间由前端基于各节点的派生估算取最大值得到。
  * @returns {void}
  */
@@ -27,7 +27,7 @@ export function renderSummary(): void {
   const total_succeeded = statusList.reduce((sum, status) => sum + (status.tasks_succeeded || 0), 0); // 总成功任务数
   const total_pending = statusList.reduce((sum, status) => sum + (status.tasks_pending || 0), 0); // 总等待任务数
   const total_failed = statusList.reduce((sum, status) => sum + (status.tasks_failed || 0), 0); // 总失败任务数
-  const total_duplicated = statusList.reduce((sum, status) => sum + (status.tasks_duplicated || 0), 0); // 总重复任务数
+  const total_skipped = statusList.reduce((sum, status) => sum + (status.tasks_skipped || 0), 0); // 总跳过任务数
   const total_nodes = statusList.reduce((sum, status) => sum + (status.status === 1 ? 1 : 0), 0); // 当前运行中的节点数
   const total_remain = Math.max(
     ...Object.values(nodeEstimates).map(
@@ -39,7 +39,7 @@ export function renderSummary(): void {
   totalSucceeded.innerHTML = formatLargeNumber(total_succeeded);
   totalPending.innerHTML = formatLargeNumber(total_pending);
   totalFailed.innerHTML = formatLargeNumber(total_failed);
-  totalDuplicated.innerHTML = formatLargeNumber(total_duplicated);
+  totalSkipped.innerHTML = formatLargeNumber(total_skipped);
   totalNodes.innerHTML = formatLargeNumber(total_nodes);
   totalRemain.textContent = formatDuration(total_remain);
   

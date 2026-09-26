@@ -82,7 +82,7 @@
       }
     }
 
-    &.seg-duplicate {
+    &.seg-skip {
       background-color: var(--marigold-400);
 
       .dark-theme & {
@@ -127,7 +127,7 @@
       }
     }
 
-    .elapsed-duplicate {
+    .elapsed-skip {
       color: var(--marigold-500);
 
       .dark-theme & {
