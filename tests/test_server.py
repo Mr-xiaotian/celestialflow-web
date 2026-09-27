@@ -241,7 +241,7 @@ def test_config_api(client):
     assert "autoRefreshEnabled" in data["global"]
     assert "refreshInterval" in data["global"]
     assert "theme" in data["global"]
-    assert "showStructureEdgeDelta" in data["dashboard"]
+    assert "structureEdgeLabel" in data["dashboard"]
     assert "sortOrder" in data["errors"]
     assert "jumpToInjectionAfterRetry" in data["errors"]
     assert "columns" in data["errors"]

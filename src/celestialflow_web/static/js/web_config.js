@@ -172,11 +172,7 @@ function normalizeWebConfig(rawConfig) {
             ...DEFAULT_WEB_CONFIG.dashboard,
             historyLimit: legacyConfig.historyLimit ?? DEFAULT_WEB_CONFIG.dashboard.historyLimit,
             structureEdgeLabel: legacyConfig.structureEdgeLabel ??
-                (legacyConfig.showStructureEdgeDelta === true
-                    ? "delta"
-                    : legacyConfig.showStructureEdgeDelta === false
-                        ? "none"
-                        : DEFAULT_WEB_CONFIG.dashboard.structureEdgeLabel),
+                DEFAULT_WEB_CONFIG.dashboard.structureEdgeLabel,
             useTotalPendingInStatus: legacyConfig.useTotalPendingInStatus ??
                 DEFAULT_WEB_CONFIG.dashboard.useTotalPendingInStatus,
             layout: normalizeDashboardLayout(legacyConfig.dashboard),

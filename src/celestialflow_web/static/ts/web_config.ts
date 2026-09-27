@@ -29,7 +29,6 @@ type LegacyWebConfig = {
   language?: Lang;
   errorPageSize?: number;
   errorSortOrder?: "newest" | "oldest";
-  showStructureEdgeDelta?: boolean;
   structureEdgeLabel?: StructureEdgeLabel;
   useTotalPendingInStatus?: boolean;
   dashboard?: Partial<DashboardLayout>;
@@ -222,11 +221,7 @@ function normalizeWebConfig(
         legacyConfig.historyLimit ?? DEFAULT_WEB_CONFIG.dashboard.historyLimit,
       structureEdgeLabel:
         legacyConfig.structureEdgeLabel ??
-        (legacyConfig.showStructureEdgeDelta === true
-          ? "delta"
-          : legacyConfig.showStructureEdgeDelta === false
-            ? "none"
-            : DEFAULT_WEB_CONFIG.dashboard.structureEdgeLabel),
+        DEFAULT_WEB_CONFIG.dashboard.structureEdgeLabel,
       useTotalPendingInStatus:
         legacyConfig.useTotalPendingInStatus ??
         DEFAULT_WEB_CONFIG.dashboard.useTotalPendingInStatus,

@@ -73,7 +73,7 @@ class DashboardPageConfigModel(BaseModel):
     """仪表盘页面配置模型"""
 
     historyLimit: int
-    showStructureEdgeDelta: bool = False
+    structureEdgeLabel: str = "none"
     useTotalPendingInStatus: bool = False
     layout: DashboardConfigModel
 
