@@ -269,6 +269,59 @@ def test_pull_server_state_rejects_empty_graph_id(client):
     assert response.json()["error"] == "unknown graph_id"
 
 
+def test_server_state_seen_flags_track_writes_and_reset(client):
+    """has_status / has_graph_meta 反映服务端是否收到过写入，会话重建后归零。"""
+    graph_id = "seen@1000"
+
+    state = _ensure_session(client, graph_id)
+    assert state["has_status"] is False
+    assert state["has_graph_meta"] is False
+
+    push_status = client.post(
+        "/api/push_status",
+        json={
+            "graph_id": graph_id,
+            "timestamp": 1.0,
+            "status": {"s1": {"status": 0}},
+        },
+    )
+    assert push_status.status_code == 200
+    assert _push_graph_meta(client, graph_id).status_code == 200
+
+    state = _ensure_session(client, graph_id)
+    assert state["has_status"] is True
+    assert state["has_graph_meta"] is True
+
+    # 会话被移除后由 pull_server_state 重建，两个标志应回到 False 以触发全量重推。
+    removed = client.post("/api/remove_session", json={"graph_id": graph_id})
+    assert removed.json() == {"ok": True}
+    state = _ensure_session(client, graph_id)
+    assert state["has_status"] is False
+    assert state["has_graph_meta"] is False
+
+
+def test_empty_graph_meta_still_marks_seen(client):
+    """图元信息的 nodes 为空时也应标记为已收到，避免每轮重推。"""
+    graph_id = "empty@1000"
+    _ensure_session(client, graph_id)
+
+    response = client.post(
+        "/api/push_graph_meta",
+        json={
+            "graph_id": graph_id,
+            "nodes": [],
+            "edges": {},
+            "source_nodes": [],
+            "node_meta": {},
+            "analysis": None,
+        },
+    )
+    assert response.status_code == 200
+
+    state = _ensure_session(client, graph_id)
+    assert state["has_graph_meta"] is True
+
+
 def test_push_errors_meta_route_removed(client):
     """`/api/push_errors_meta` 已删除，不应再接受请求。"""
     response = client.post(

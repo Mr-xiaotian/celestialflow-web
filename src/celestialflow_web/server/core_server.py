@@ -82,6 +82,10 @@ class GraphSession:
         self.status_store: dict[str, dict[str, Any]] = {}
         self.status_timestamp: float = 0.0
         self.graph_meta_store: dict[str, Any] = _empty_graph_meta()
+        # 是否收到过对应 store 的写入。用显式标志而非“内容是否为空”判断，
+        # 避免空图（无节点）被误判为从未收到图元信息而反复重推。
+        self.graph_meta_seen: bool = False
+        self.status_seen: bool = False
         self.injection_tasks: dict[str, list[Any]] = {}
         self.injection_terminations: set[str] = set()
 
@@ -128,9 +132,9 @@ class GraphSession:
         :rtype: dict[str, Any]
         """
         with self.status_lock:
-            has_status = bool(self.status_store)
+            has_status = self.status_seen
         with self.graph_meta_lock:
-            has_graph_meta = bool(self.graph_meta_store["nodes"])
+            has_graph_meta = self.graph_meta_seen
         return {
             "graph_id": self.graph_id,
             "name": self.name,
@@ -386,6 +390,7 @@ class TaskWebServer:
         session = self.require_session(graph_id)
         with session.graph_meta_lock:
             session.graph_meta_store = copy.deepcopy(graph_meta)
+            session.graph_meta_seen = True
             session.store_revs["graph_meta"] = self._next_rev("graph_meta")
 
     def update_status_store(
@@ -404,6 +409,7 @@ class TaskWebServer:
         with session.status_lock:
             session.status_timestamp = timestamp
             session.status_store = copy.deepcopy(status)
+            session.status_seen = True
             session.store_revs["status"] = self._next_rev("status")
 
     def update_errors_store(self, graph_id: str, errors: list[dict[str, Any]]) -> None:
@@ -520,9 +526,9 @@ class TaskWebServer:
         """
         session = self.ensure_session(graph_id)
         with session.graph_meta_lock:
-            has_graph_meta = bool(session.graph_meta_store["nodes"])
+            has_graph_meta = session.graph_meta_seen
         with session.status_lock:
-            has_status = bool(session.status_store)
+            has_status = session.status_seen
         return {
             "graph_id": session.graph_id,
             "interval": self.report_interval,
