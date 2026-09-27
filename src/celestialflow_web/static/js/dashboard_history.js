@@ -3,6 +3,7 @@
  * 维护节点处理任务的历史序列，并使用 Chart.js 绘制进度折线图
  */
 import { t } from "./i18n.js";
+import { SESSION_SWITCH_EVENT } from "./sessions.js";
 import { webConfig } from "./web_config.js";
 /** 趋势类指标到其累计来源字段的映射 */
 const DELTA_SOURCE_METRIC = {
@@ -189,6 +190,16 @@ export function trimNodeHistories() {
     }
     nodeHistories = nextHistories;
     return changed;
+}
+/**
+ * 清空前端本地累积的历史曲线，用于切换会话。
+ *
+ * 历史序列完全在前端维护，若不清理会把上一个会话的曲线错误地接到新会话上。
+ * @returns {void}
+ */
+function resetNodeHistories() {
+    nodeHistories = {};
+    hiddenNodes = new Set();
 }
 /**
  * 根据最新状态快照在前端追加多指标历史点
@@ -414,3 +425,8 @@ export function updateChartData() {
         });
     }
 }
+// 切换会话时清空历史曲线，避免跨会话串联。
+document.addEventListener(SESSION_SWITCH_EVENT, () => {
+    resetNodeHistories();
+    updateChartData();
+});

@@ -1,8 +1,7 @@
 /**
  * 通用工具模块
- * 包含数值格式化、时间转换、设备检测及复杂的 UI 辅助逻辑
+ * 包含数值格式化、时间转换及复杂的 UI 辅助逻辑
  */
-import { nodeFilter } from "./errors.js";
 import { t } from "./i18n.js";
 import { activateTab } from "./main.js";
 /**
@@ -37,13 +36,6 @@ export function formatWithDelta(value, delta, deltaClass, negClass) {
     const sign = delta > 0 ? "+" : "-"; // 增量显示符号
     const cls = delta > 0 ? deltaClass : negClass; // 根据正负值选择颜色类
     return `${fmtValue}<small class="${cls}" style="margin-left: 4px;">${sign}${formatLargeNumber(Math.abs(delta))}</small>`;
-}
-/**
- * 简单的移动端设备检测
- * @returns {boolean} 如果是移动设备则返回 true
- */
-function isMobile() {
-    return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 /**
  * 转义 HTML 特殊字符，防止 XSS
@@ -165,17 +157,17 @@ export function formatAvgTime(elapsed, processed) {
 /**
  * 将对象格式化为字符串，自动转义换行、截断超长文本。
  * @param {unknown} obj - 任意对象
- * @param {number} max_length - 显示的最大字符数（超出将被截断）
+ * @param {number} maxLength - 显示的最大字符数（超出将被截断）
  * @returns {string} 格式化字符串
  */
-export function format_repr(obj, max_length) {
-    let obj_str = String(obj).replace(/\\/g, "\\\\").replace(/\n/g, "\\n"); // 保留换行与反斜杠的可见形式
-    if (max_length <= 0 || obj_str.length <= max_length) {
-        return obj_str;
+export function formatRepr(obj, maxLength) {
+    const objStr = String(obj).replace(/\\/g, "\\\\").replace(/\n/g, "\\n"); // 保留换行与反斜杠的可见形式
+    if (maxLength <= 0 || objStr.length <= maxLength) {
+        return objStr;
     }
     // 截断逻辑（前 2/3 + ... + 后 1/3）
-    const segment_len = Math.max(1, Math.floor(max_length / 3)); // 单侧保留的最小片段长度
-    const first_part = obj_str.slice(0, segment_len * 2); // 前段保留更长，方便快速识别
-    const last_part = obj_str.slice(-segment_len); // 末段保留尾部上下文
-    return `${first_part}...${last_part}`;
+    const segmentLen = Math.max(1, Math.floor(maxLength / 3)); // 单侧保留的最小片段长度
+    const firstPart = objStr.slice(0, segmentLen * 2); // 前段保留更长，方便快速识别
+    const lastPart = objStr.slice(-segmentLen); // 末段保留尾部上下文
+    return `${firstPart}...${lastPart}`;
 }

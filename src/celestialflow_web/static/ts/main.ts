@@ -17,34 +17,35 @@ import { applyI18nDOM, setLang, t } from "./i18n.js";
 import { refreshInjectionLocalizedText, renderInjectionPage, renderNodeList } from "./injection.js";
 // 只做副作用：该模块自行注册布局编辑器的 DOMContentLoaded 交互，无导出。
 import "./layout_editor.js";
-import { lastNodeStatuses, lastStatusTimestamp, loadGraphMeta, loadStatuses, nodeEstimates, nodeStatuses, refreshNodeEstimates } from "./loaders.js";
+import { loadGraphMeta, loadStatuses, nodeEstimates, nodeStatuses, refreshNodeEstimates, lastNodeStatuses, lastStatusTimestamp } from "./loaders.js";
+// 只做副作用：会话模块自行注册 DOMContentLoaded 拉取与选择器渲染。
+import { renderSessionSelector } from "./sessions.js";
+import { showSettingsSaveStatus, updateSettingsStatusText } from "./settings_status.js";
 import type { Lang, StructureEdgeLabel } from "./types.js";
+import {
+  autoRefreshToggle,
+  errorJumpToInjectionToggle,
+  errorPageSizeSelect,
+  historyLimitSelect,
+  injectableOnlyToggle,
+  languageSelect,
+  refreshSelect,
+  settingsBtn,
+  settingsClose,
+  settingsCurrentEmpty,
+  settingsCurrentGroup,
+  settingsCurrentItems,
+  settingsCurrentLabel,
+  settingsPanel,
+  statusTotalPendingToggle,
+  structureEdgeLabelSelect,
+  tabButtons,
+  tabContents,
+  themeToggleBtn,
+} from "./dom_refs.js";
 
 // 全局配置与状态变量
 let refreshIntervalId: ReturnType<typeof setInterval> | null = null; // 轮询定时器 ID
-
-// DOM 元素引用
-export const refreshSelect = document.getElementById("refresh-interval") as HTMLSelectElement; // 刷新间隔下拉框
-export const historyLimitSelect = document.getElementById("history-limit") as HTMLSelectElement; // 历史长度下拉框
-const settingsBtn = document.getElementById("settings-btn") as HTMLButtonElement; // 设置齿轮按钮
-const settingsPanel = document.getElementById("settings-panel") as HTMLElement; // 设置悬浮面板
-const settingsClose = document.getElementById("settings-close") as HTMLButtonElement; // 设置面板关闭按钮
-const settingsStatus = document.getElementById("settings-status") as HTMLElement; // 设置保存状态提示
-export const themeToggleBtn = document.getElementById("theme-toggle") as HTMLButtonElement; // 主题切换按钮
-const languageSelect = document.getElementById("language-select") as HTMLSelectElement; // 语言选择下拉框
-export const autoRefreshToggle = document.getElementById("auto-refresh-toggle") as HTMLInputElement; // 自动刷新开关
-const errorPageSizeSelect = document.getElementById("error-page-size") as HTMLSelectElement; // 错误每页条数下拉框
-const errorJumpToInjectionToggle = document.getElementById("error-jump-to-injection-toggle") as HTMLInputElement; // 错误页任务注入后是否跳转
-export const structureEdgeLabelSelect = document.getElementById("structure-edge-label") as HTMLSelectElement; // 结构图边标签显示模式下拉框
-export const statusTotalPendingToggle = document.getElementById("status-total-pending-toggle") as HTMLInputElement; // 节点状态卡等待值模式开关
-const injectableOnlyToggle = document.getElementById("injectable-only-toggle") as HTMLInputElement; // 注入页仅显示可注入节点开关
-const settingsCurrentGroup = document.getElementById("settings-current-group") as HTMLElement; // 当前页设置分组
-const settingsCurrentLabel = document.getElementById("settings-current-label") as HTMLElement; // 当前页设置分组标题
-const settingsCurrentEmpty = document.getElementById("settings-current-empty") as HTMLElement; // 当前页无专属设置提示
-const settingsCurrentItems = document.querySelectorAll<HTMLElement>("[data-settings-tab]"); // 当前页设置项列表
-const tabButtons = document.querySelectorAll<HTMLElement>(".tab-btn"); // 页签按钮列表
-const tabContents = document.querySelectorAll<HTMLElement>(".tab-content"); // 页签内容列表
-let settingsStatusTimer: ReturnType<typeof setTimeout> | null = null; // 设置状态提示自动隐藏定时器
 
 /**
  * 切换页面暗黑/明亮主题
@@ -66,39 +67,6 @@ function syncAutoRefreshTimer(): void {
     if (webConfig.global.autoRefreshEnabled) {
         refreshIntervalId = setInterval(refreshAll, refreshRate);
     }
-}
-
-/**
- * 显示设置保存状态消息
- * @param {string} messageKey - 状态消息的翻译键
- * @returns {void}
- */
-export function showSettingsSaveStatus(messageKey: string): void {
-    if (settingsStatusTimer) {
-        clearTimeout(settingsStatusTimer);
-    }
-
-    settingsStatus.dataset.messageKey = messageKey;
-    settingsStatus.textContent = t(messageKey);
-    settingsStatus.classList.remove("hidden", "settings-status-success", "settings-status-error");
-    settingsStatus.classList.add(
-        messageKey === "settings.saveSuccess" ? "settings-status-success" : "settings-status-error"
-    );
-
-    settingsStatusTimer = setTimeout(() => {
-        settingsStatus.classList.add("hidden");
-        settingsStatus.dataset.messageKey = "";
-    }, messageKey === "settings.saveSuccess" ? 2000 : 5000);
-}
-
-/**
- * 更新设置保存状态消息文本
- * @returns {void}
- */
-function updateSettingsStatusText(): void {
-    const messageKey = settingsStatus.dataset.messageKey;
-    if (!messageKey) return;
-    settingsStatus.textContent = t(messageKey);
 }
 
 /**
@@ -313,6 +281,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateSettingsStatusText();
         themeToggleBtn.textContent = document.body.classList.contains("dark-theme") ? t("theme.light") : t("theme.dark");
         rerenderAllViews();
+        renderSessionSelector();
         renderNodeList();
         refreshInjectionLocalizedText();
         showSettingsSaveStatus(await saveWebConfig() ? "settings.saveSuccess" : "settings.saveFailed");

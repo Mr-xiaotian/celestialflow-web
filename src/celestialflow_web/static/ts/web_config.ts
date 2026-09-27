@@ -5,9 +5,20 @@
  * 不属于对外契约，因此留在本文件。
  */
 
-import { errorSortOrder, errorSortSelect, errors, renderErrorsTableHeader, setErrorPageSize, setErrorSortOrder } from "./errors.js";
+import { errorSortOrder, errorSortSelect, renderErrorsTableHeader, setErrorPageSize, setErrorSortOrder } from "./errors.js";
 import { applyI18nDOM, currentLang, setLang, t } from "./i18n.js";
-import { autoRefreshToggle, historyLimitSelect, refreshSelect, statusTotalPendingToggle, structureEdgeLabelSelect, themeToggleBtn } from "./main.js";
+import {
+  autoRefreshToggle,
+  errorJumpToInjectionToggle,
+  errorPageSizeSelect,
+  historyLimitSelect,
+  injectableOnlyToggle,
+  languageSelect,
+  refreshSelect,
+  statusTotalPendingToggle,
+  structureEdgeLabelSelect,
+  themeToggleBtn,
+} from "./dom_refs.js";
 import type { DashboardColumnKey, DashboardLayout, ErrorColumnKey, Lang, StructureEdgeLabel, WebConfig } from "./types.js";
 
 type LegacyWebConfig = {
@@ -61,6 +72,21 @@ const PANEL_SELECTOR_MAP: Record<DashboardColumnKey, string> = {
 };
 
 /**
+ * 全部合法卡片 ID。
+ *
+ * 显式列出而非由 `CARD_TEMPLATES` 推导：`normalizeDashboardLayout` 在模块初始化
+ * 早期就会用它过滤未知 ID，而模板对象定义在更后面，推导会触发 TDZ。
+ */
+export const ALL_CARD_IDS: string[] = [
+  "mermaid",
+  "analysis",
+  "status",
+  "progress",
+  "error-types",
+  "summary",
+];
+
+/**
  * 判断后端返回值是否已经是新的分组配置结构。
  * @param {unknown} rawConfig - 后端返回的原始配置。
  * @returns {boolean} 若为分组结构则返回 true。
@@ -72,17 +98,31 @@ function isGroupedWebConfig(rawConfig: unknown): rawConfig is Partial<WebConfig>
 }
 
 /**
- * 基于默认布局补齐后端返回的栏位配置。
+ * 基于默认布局补齐后端返回的栏位配置，并过滤掉未知卡片 ID。
+ *
+ * 过滤是必要的：幽灵 ID 会被渲染逻辑当作模板名或拼进选择器，
+ * 既可能注入 HTML，也可能让 `querySelector` 因非法字符抛错。
  * @param {Partial<DashboardLayout> | null | undefined} rawLayout - 原始仪表盘布局。
- * @returns {DashboardLayout} 补齐后的稳定布局对象。
+ * @returns {DashboardLayout} 补齐并清洗后的稳定布局对象。
  */
 function normalizeDashboardLayout(
   rawLayout?: Partial<DashboardLayout> | null,
 ): DashboardLayout {
-  return {
+  const merged = {
     ...DEFAULT_WEB_CONFIG.dashboard.layout,
     ...(rawLayout ?? {}),
   };
+  const known = new Set(ALL_CARD_IDS);
+  const result = { ...merged };
+  for (const column of Object.keys(merged) as DashboardColumnKey[]) {
+    const seen = new Set<string>();
+    result[column] = merged[column].filter((cardId) => {
+      if (!known.has(cardId) || seen.has(cardId)) return false;
+      seen.add(cardId);
+      return true;
+    });
+  }
+  return result;
 }
 
 /**
@@ -220,8 +260,7 @@ let saveConfigPromise: Promise<boolean> | null = null; // 当前正在执行的�
 
 /** 每张仪表盘卡片的 HTML 模板，供初始化和恢复布局时复用。 */
 const CARD_TEMPLATES: Record<string, string> = {
-  // ⚠️ 加新卡片只需在这里加一条，ID 会自动出现在布局编辑器中
-  // 显示名称用 CARD_META 映射，ALL_CARD_IDS 从 keys 自动生成
+  // ⚠️ 加新卡片时需同时更新 ALL_CARD_IDS 与 CARD_META
   mermaid: `
     <div class="card mermaid-card">
       <h2 class="card-title" id="mermaid-title" data-i18n="card.mermaid.title">结构图</h2>
@@ -335,21 +374,29 @@ export const CARD_META: Record<string, string> = {
   summary: "card.summary.title",
 };
 
-/** 当前支持加入布局编辑器的全部卡片 ID。 */
-export const ALL_CARD_IDS: string[] = Object.keys(CARD_TEMPLATES);
-
 /**
  * 确保所有卡片节点都已出现在隐藏池中，供后续布局重排直接移动。
+ *
+ * 在求值期被调用，若容器缺失只能失败得足够显眼，而不是让后续模块读到 null。
+ *
  * @returns {void}
+ * @raises Error: `#card-pool` 容器缺失，或卡片模板未产出元素时抛出
  */
 function ensureAllCards(): void {
-  const pool = document.getElementById("card-pool")!; // 统一承载尚未挂载到栏位的卡片节点
+  const pool = document.getElementById("card-pool"); // 统一承载尚未挂载到栏位的卡片节点
+  if (!pool) {
+    throw new Error("web_config: #card-pool not found");
+  }
   for (const [key, html] of Object.entries(CARD_TEMPLATES)) {
     const cls = `${key}-card`; // 每张卡片的唯一类名入口
     if (!document.querySelector(`.${cls}`)) {
       const el = document.createElement("div"); // 临时容器，用于把字符串模板转成真实 DOM
       el.innerHTML = html;
-      pool.appendChild(el.firstElementChild!);
+      const cardEl = el.firstElementChild;
+      if (!cardEl) {
+        throw new Error(`web_config: card template produced no element: ${key}`);
+      }
+      pool.appendChild(cardEl);
     }
   }
 }
@@ -444,10 +491,7 @@ export function applyConfig(): void {
   // 应用语言
   webConfig.global.language = webConfig.global.language || "zh-CN";
   setLang(webConfig.global.language);
-  const langSelect = document.getElementById(
-    "language-select",
-  ) as HTMLSelectElement;
-  if (langSelect) langSelect.value = currentLang;
+  languageSelect.value = currentLang;
 
   // 应用主题
   if (webConfig.global.theme === "dark") {
@@ -484,16 +528,11 @@ export function applyConfig(): void {
   if (Number.isFinite(eps) && eps > 0) {
     setErrorPageSize(eps);
     const epsStr = eps.toString(); // select 的 option 值是字符串
-    const errorPageSizeSelect = document.getElementById(
-      "error-page-size",
-    ) as HTMLSelectElement;
-    if (errorPageSizeSelect) {
-      const hasOption = Array.from(errorPageSizeSelect.options).some(
-        (o) => o.value === epsStr,
-      );
-      if (hasOption) {
-        errorPageSizeSelect.value = epsStr;
-      }
+    const hasOption = Array.from(errorPageSizeSelect.options).some(
+      (o) => o.value === epsStr,
+    );
+    if (hasOption) {
+      errorPageSizeSelect.value = epsStr;
     }
   }
 
@@ -505,13 +544,8 @@ export function applyConfig(): void {
   webConfig.errors.jumpToInjectionAfterRetry =
     webConfig.errors.jumpToInjectionAfterRetry !== false;
   webConfig.errors.columns = normalizeErrorColumns(webConfig.errors.columns);
-  const errorJumpToInjectionToggle = document.getElementById(
-    "error-jump-to-injection-toggle",
-  ) as HTMLInputElement | null;
-  if (errorJumpToInjectionToggle) {
-    errorJumpToInjectionToggle.checked =
-      webConfig.errors.jumpToInjectionAfterRetry;
-  }
+  errorJumpToInjectionToggle.checked =
+    webConfig.errors.jumpToInjectionAfterRetry;
   renderErrorsTableHeader();
 
   // 应用结构图边标签显示模式
@@ -532,12 +566,7 @@ export function applyConfig(): void {
   // 应用注入页节点过滤开关
   webConfig.injection.showInjectableOnly =
     webConfig.injection.showInjectableOnly !== false;
-  const injectableOnlyToggle = document.getElementById(
-    "injectable-only-toggle",
-  ) as HTMLInputElement | null;
-  if (injectableOnlyToggle) {
-    injectableOnlyToggle.checked = webConfig.injection.showInjectableOnly;
-  }
+  injectableOnlyToggle.checked = webConfig.injection.showInjectableOnly;
 
   // 应用国际化
   applyI18nDOM();

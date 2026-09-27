@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import argparse
 import copy
+import logging
 import os
 import tempfile
 import threading
+import time
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any, cast
 
 import uvicorn
@@ -22,10 +26,10 @@ from fastapi.templating import (
 from ..routes import create_router
 from ..runtime.util_cal import cal_interval
 from ..runtime.util_config import load_config
+from ..runtime.util_errors import SessionNotFoundError
 from ..runtime.util_models import WebConfigModel
 from ..runtime.util_sqlite import (
     append_records,
-    clear_records,
     connect_db,
     get_max_event_id_in_fail,
     load_records,
@@ -36,24 +40,148 @@ from ..runtime.util_sqlite import (
 PACKAGE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(PACKAGE_DIR, "config.json")
 
+logger = logging.getLogger("celestialflow_web.server")
+
 static_path = os.path.join(PACKAGE_DIR, "static")
 templates_path = os.path.join(PACKAGE_DIR, "templates")
 
 
+def _empty_graph_meta() -> dict[str, Any]:
+    """构造一份空的图元信息缓存，供新建会话初始化。"""
+    return {
+        "nodes": [],
+        "edges": {},
+        "source_nodes": [],
+        "node_meta": {},
+        "analysis": None,
+    }
+
+
+class GraphSession:
+    """
+    单个任务图运行实例在服务端的会话上下文。
+
+    每个会话独占自己的状态缓存、图元信息缓存、错误数据库与待注入队列，
+    不同会话之间互不干扰；错误数据库在创建时使用 ``tempfile.mkstemp``
+    手动管理文件描述符，避免 Windows 上自动删除与重打开冲突。
+
+    :param graph_id: 任务图实例的唯一标识
+    :param name: 任务图名称，取自 ``graph_id`` 中 ``@`` 之前的部分
+    """
+
+    def __init__(self, graph_id: str, name: str) -> None:
+        """
+        初始化会话上下文。
+
+        :param graph_id: 任务图实例的唯一标识
+        :param name: 任务图名称
+        """
+        self.graph_id: str = graph_id
+        self.name: str = name
+
+        self.status_store: dict[str, dict[str, Any]] = {}
+        self.status_timestamp: float = 0.0
+        self.graph_meta_store: dict[str, Any] = _empty_graph_meta()
+        self.injection_tasks: dict[str, list[Any]] = {}
+        self.injection_terminations: set[str] = set()
+
+        fd, records_db_path = tempfile.mkstemp(
+            prefix="celestialflow-web-records-", suffix=".sqlite3"
+        )
+        os.close(fd)
+        self.records_db_path: str = records_db_path
+        try:
+            conn = connect_db(self.records_db_path)
+            conn.close()
+        except Exception:
+            # 建库失败时回收已创建的临时文件，避免留下无人引用的孤儿文件。
+            self._remove_db_files()
+            raise
+
+        # 各类 store 的 rev + payload 需要原子读写，避免 pull 读到撕裂快照
+        self.status_lock: threading.Lock = threading.Lock()
+        self.graph_meta_lock: threading.Lock = threading.Lock()
+        self.errors_lock: threading.Lock = threading.Lock()
+        self.task_injection_lock: threading.Lock = threading.Lock()
+
+        # 每次 push 时递增，pull 时对比，无变化则返回 null data
+        self.store_revs: dict[str, int] = {
+            "status": 0,
+            "graph_meta": 0,
+            "errors": 0,
+        }
+
+        self.alive: bool = True
+        self.shutdown_reason: str | None = None
+        self.created_at: float = time.time()
+        self.last_seen: float = self.created_at
+
+    def touch(self) -> None:
+        """刷新会话最近活跃时间。"""
+        self.last_seen = time.time()
+
+    def summary(self) -> dict[str, Any]:
+        """
+        返回会话的元信息摘要，供前端会话列表使用。
+
+        :return: 会话摘要字典
+        :rtype: dict[str, Any]
+        """
+        with self.status_lock:
+            has_status = bool(self.status_store)
+        with self.graph_meta_lock:
+            has_graph_meta = bool(self.graph_meta_store["nodes"])
+        return {
+            "graph_id": self.graph_id,
+            "name": self.name,
+            "alive": self.alive,
+            "shutdown_reason": self.shutdown_reason,
+            "created_at": self.created_at,
+            "last_seen": self.last_seen,
+            "has_graph_meta": has_graph_meta,
+            "has_status": has_status,
+        }
+
+    def close(self) -> None:
+        """释放会话占用的临时错误数据库文件（含 WAL 旁路文件）。"""
+        self._remove_db_files()
+
+    def _remove_db_files(self) -> None:
+        """
+        删除临时错误数据库及其 WAL/SHM 旁路文件。
+
+        删除失败（如 Windows 上仍被占用）只记录告警，不向上抛出，
+        以免遮蔽调用方的原始异常。
+        """
+        for suffix in ("", "-wal", "-shm"):
+            path = self.records_db_path + suffix
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                logger.warning("failed to remove session db file %s: %s", path, e)
+
+
 class TaskWebServer:
-    """FastAPI Web 服务，提供任务可视化、状态推送和任务注入接口。"""
+    """
+    FastAPI Web 服务，提供任务可视化、状态推送和任务注入接口。
+
+    服务端按 ``graph_id`` 维护多个 :class:`GraphSession`，允许多个任务图
+    运行实例（通常位于不同进程或不同机器）同时上报，前端可在会话之间切换。
+    """
 
     def __init__(
         self, host: str = "0.0.0.0", port: int = 5000, log_level: str = "info"
     ) -> None:
         """
-        初始化 FastAPI 应用、数据存储、版本计数器及路由。
+        初始化 FastAPI 应用、会话容器、版本计数器及路由。
 
         :param host: 绑定主机地址，默认 "0.0.0.0"
         :param port: 绑定端口，默认 5000
         :param log_level: uvicorn 日志级别，默认 "info"
         """
-        self.app: FastAPI = FastAPI()
+        self.app: FastAPI = FastAPI(lifespan=self._lifespan)
         self.host: str = host
         self.port: int = port
         self.log_level: str = log_level
@@ -63,44 +191,20 @@ class TaskWebServer:
 
         self.templates: Jinja2Templates = Jinja2Templates(directory=templates_path)
 
-        # 用于存储状态、图元信息、错误信息
-        self.status_store: dict[str, dict[str, Any]] = {}
-        self.status_timestamp: float = 0.0
-        self.graph_meta_store: dict[str, Any] = {
-            "nodes": [],
-            "edges": {},
-            "source_nodes": [],
-            "node_meta": {},
-            "analysis": None,
-        }
-        self.injection_tasks: dict[str, list[Any]] = {}  # 存储前端注入任务
-        self.injection_terminations: set[str] = set()  # 存储前端注入终止符
-        self.current_graph_id: str = ""
-        # 使用 mkstemp 手动管理文件描述符，避免 NamedTemporaryFile
-        # 在 Windows 上的自动删除与文件重打开冲突
-        fd, records_db_path = tempfile.mkstemp(
-            prefix="celestialflow-web-records-", suffix=".sqlite3"
-        )
-        os.close(fd)
-        self.records_db_path: str = records_db_path
-        conn = connect_db(self.records_db_path)
-        conn.close()
+        # 所有 graph 会话，键为 graph_id
+        self.sessions: dict[str, GraphSession] = {}
 
-        # 各类 store 的 rev + payload 需要原子读写，避免 pull 读到撕裂快照
-        self.status_lock: threading.Lock = threading.Lock()
-        self.graph_meta_lock: threading.Lock = threading.Lock()
-        self.errors_lock: threading.Lock = threading.Lock()
-        self.graph_context_lock: threading.Lock = threading.Lock()
+        # 会话列表自身的增删由该锁保护；会话内部状态由各自 store 锁保护
+        self.sessions_lock: threading.Lock = threading.Lock()
 
-        # 用于存储任务注入锁
-        self.task_injection_lock: threading.Lock = threading.Lock()
-
-        # 每次 push 时递增，pull 时对比，无变化则返回 null data
+        # 数据版本号保留全局单调递增：任意会话的 push 都会推进全局 rev，
+        # 因此前端切换会话后 known_rev 必然不相等，可直接拿到全量数据。
         self.store_revs: dict[str, int] = {
             "status": 0,
             "graph_meta": 0,
             "errors": 0,
         }
+        self.rev_lock: threading.Lock = threading.Lock()
 
         # 加载配置
         config_raw: Any = WebConfigModel.model_validate(
@@ -113,119 +217,253 @@ class TaskWebServer:
         self.config_lock: threading.Lock = threading.Lock()
         self.config_path: str = CONFIG_PATH
 
+        # 供 lifespan 关闭阶段反查自身（实例由 uvicorn 持有）。
+        self.app.state.server = self
+
         self._setup_routes()
 
-    # ==== Graph Context ====
-    def _reset_graph_scoped_stores(self) -> None:
+    @staticmethod
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         """
-        清空与当前 graph 运行实例绑定的缓存。
+        应用生命周期钩子：进程退出时释放全部会话的临时数据库文件。
 
-        该方法会同时重置状态、图元信息与错误缓存，并递增对应的
-        store 版本号，使前端在下一轮 pull 时感知到 graph 已切换。
+        不使用该钩子时，`tempfile` 创建的会话库会随进程退出残留在磁盘上。
+
+        :param app: FastAPI 应用实例（用于反查 server 实例）
+        :return: 异步上下文管理器，退出时为关闭阶段
+        :rtype: AsyncGenerator[None]
+        """
+        yield
+        # 关闭阶段：实例由 uvicorn 持有，通过 app.state 反查。
+        server: TaskWebServer | None = getattr(app.state, "server", None)
+        if server is not None:
+            server.close_all_sessions()
+
+    def close_all_sessions(self) -> None:
+        """
+        移除并释放当前持有的全部会话。
 
         :return: None
         """
-        with self.status_lock:
-            self.status_store = {}
-            self.status_timestamp = 0.0
-            self.store_revs["status"] += 1
-        with self.graph_meta_lock:
-            self.graph_meta_store = {
-                "nodes": [],
-                "edges": {},
-                "source_nodes": [],
-                "node_meta": {},
-                "analysis": None,
-            }
-            self.store_revs["graph_meta"] += 1
-        with self.errors_lock:
-            clear_records(self.records_db_path)
-            self.store_revs["errors"] += 1
+        with self.sessions_lock:
+            sessions = list(self.sessions.values())
+            self.sessions.clear()
+            for session in sessions:
+                session.close()
 
-    def sync_graph_context(self, graph_id: str) -> bool:
+    # ==== Session Lifecycle ====
+    def create_session(self, graph_id: str) -> GraphSession:
         """
-        同步 server 当前持有的 graph 上下文。
+        创建一个新的 graph 会话并登记到会话表。
 
-        当传入的 ``graph_id`` 与当前 graph 不一致时，
-        server 会切换到新的 graph，并清空所有 graph 级缓存。
+        若已存在同 `graph_id` 的会话则直接返回既有实例，不会重建缓存。
 
-        :param graph_id: reporter 当前任务图实例的唯一标识
-        :return: 在调用前 server 是否已经持有当前 graph
+        :param graph_id: 任务图实例的唯一标识
+        :return: 新建或既有的会话上下文
+        :rtype: GraphSession
+        """
+        with self.sessions_lock:
+            existing = self.sessions.get(graph_id)
+            if existing is not None:
+                return existing
+            name = graph_id.split("@", 1)[0]
+            session = GraphSession(graph_id=graph_id, name=name or graph_id)
+            self.sessions[graph_id] = session
+            return session
+
+    def get_session(self, graph_id: str) -> GraphSession | None:
+        """
+        读取指定会话，不存在时返回 ``None``。
+
+        :param graph_id: 任务图实例的唯一标识
+        :return: 对应会话或 ``None``
+        :rtype: GraphSession | None
+        """
+        with self.sessions_lock:
+            return self.sessions.get(graph_id)
+
+    def require_session(self, graph_id: str) -> GraphSession:
+        """
+        读取指定会话，不存在时抛出 :class:`SessionNotFoundError`。
+
+        :param graph_id: 任务图实例的唯一标识
+        :return: 对应会话
+        :rtype: GraphSession
+        :raises SessionNotFoundError: 会话不存在时触发
+        """
+        session = self.get_session(graph_id)
+        if session is None:
+            raise SessionNotFoundError(graph_id)
+        return session
+
+    def ensure_session(self, graph_id: str) -> GraphSession:
+        """
+        确保指定会话存在并刷新其活跃时间。
+
+        reporter 每次状态对齐都会调用该方法，因此不存在的会话会被自动创建。
+
+        :param graph_id: 任务图实例的唯一标识
+        :return: 对应会话
+        :rtype: GraphSession
+        """
+        session = self.create_session(graph_id)
+        session.touch()
+        return session
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        """
+        返回全部会话的摘要列表，按创建时间倒序排列。
+
+        :return: 会话摘要列表
+        :rtype: list[dict[str, Any]]
+        """
+        with self.sessions_lock:
+            sessions = list(self.sessions.values())
+        summaries = [session.summary() for session in sessions]
+        summaries.sort(key=lambda item: item["created_at"], reverse=True)
+        return summaries
+
+    def shutdown_session(self, graph_id: str) -> bool:
+        """
+        标记会话为已结束（reporter 主动通知）。
+
+        会话数据与错误数据库会保留，前端仍可切回查看；重复调用是幂等的。
+
+        :param graph_id: 任务图实例的唯一标识
+        :return: 是否命中了已存在的会话
         :rtype: bool
         """
-        with self.graph_context_lock:
-            if self.current_graph_id == graph_id:
-                return True
-            self.current_graph_id = graph_id
-            self._reset_graph_scoped_stores()
+        session = self.get_session(graph_id)
+        if session is None:
             return False
+        session.alive = False
+        session.shutdown_reason = "reporter_stopped"
+        session.touch()
+        return True
 
-    def is_current_graph(self, graph_id: str) -> bool:
+    def remove_session(self, graph_id: str) -> bool:
         """
-        判断给定 ``graph_id`` 是否等于 server 当前 graph 上下文。
+        彻底移除会话：释放缓存并删除其临时错误数据库文件。
 
-        该方法只做一致性检查，不会修改任何缓存或 graph 上下文。
+        删除在 `sessions_lock` 内完成，确保没有其它线程能在摘除后、
+        删除前拿到该会话引用（否则在途请求会重建已删除的 sqlite 文件）。
 
-        :param graph_id: 待校验的任务图实例标识
-        :return: 是否为当前 graph
+        :param graph_id: 任务图实例的唯一标识
+        :return: 是否移除了一个已存在的会话
         :rtype: bool
         """
-        if not graph_id:
-            return False
-        with self.graph_context_lock:
-            return bool(self.current_graph_id) and self.current_graph_id == graph_id
+        with self.sessions_lock:
+            session = self.sessions.pop(graph_id, None)
+            if session is None:
+                return False
+            session.close()
+        return True
+
+    # ==== Rev Management ====
+    def _next_rev(self, key: str) -> int:
+        """
+        推进并返回全局版本号计数器中指定键的值。
+
+        :param key: 版本号键，可选 ``status`` / ``graph_meta`` / ``errors``
+        :return: 推进后的版本号
+        :rtype: int
+        """
+        with self.rev_lock:
+            self.store_revs[key] += 1
+            return self.store_revs[key]
 
     # ==== Store Writes ====
-    def update_graph_meta_store(self, graph_meta: dict[str, Any]) -> None:
+    def update_graph_meta_store(self, graph_id: str, graph_meta: dict[str, Any]) -> None:
         """
-        原子更新图元信息缓存（结构 + 节点元信息 + 分析）及其版本号。
+        原子更新指定会话的图元信息缓存（结构 + 节点元信息 + 分析）并推进版本号。
 
+        :param graph_id: 任务图实例的唯一标识
         :param graph_meta: 最新图元信息数据
         :return: None
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.graph_meta_lock:
-            self.graph_meta_store = copy.deepcopy(graph_meta)
-            self.store_revs["graph_meta"] += 1
+        session = self.require_session(graph_id)
+        with session.graph_meta_lock:
+            session.graph_meta_store = copy.deepcopy(graph_meta)
+            session.store_revs["graph_meta"] = self._next_rev("graph_meta")
 
     def update_status_store(
-        self, timestamp: float, status: dict[str, dict[str, Any]]
+        self, graph_id: str, timestamp: float, status: dict[str, dict[str, Any]]
     ) -> None:
         """
-        原子更新状态缓存、时间戳及其版本号。
+        原子更新指定会话的状态缓存、时间戳及其版本号。
 
+        :param graph_id: 任务图实例的唯一标识
         :param timestamp: 当前状态快照对应的统一时间戳
         :param status: 各节点状态字典
         :return: None
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.status_lock:
-            self.status_timestamp = timestamp
-            self.status_store = copy.deepcopy(status)
-            self.store_revs["status"] += 1
+        session = self.require_session(graph_id)
+        with session.status_lock:
+            session.status_timestamp = timestamp
+            session.status_store = copy.deepcopy(status)
+            session.store_revs["status"] = self._next_rev("status")
 
-    def update_errors_store(
-        self,
-        errors: list[dict[str, Any]],
-    ) -> None:
+    def update_errors_store(self, graph_id: str, errors: list[dict[str, Any]]) -> None:
         """
-        原子更新错误缓存及其版本号。
+        原子更新指定会话的错误缓存及其版本号。
 
+        :param graph_id: 任务图实例的唯一标识
         :param errors: 待写入的错误记录列表
         :return: None
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.errors_lock:
-            _ = append_records(self.records_db_path, errors)
-            self.store_revs["errors"] += 1
+        session = self.require_session(graph_id)
+        with session.errors_lock:
+            _ = append_records(session.records_db_path, errors)
+            session.store_revs["errors"] = self._next_rev("errors")
+
+    def add_injection_tasks(self, graph_id: str, tasks: dict[str, list[Any]]) -> None:
+        """
+        将前端提交的注入任务按节点覆盖写入指定会话的待执行队列。
+
+        :param graph_id: 任务图实例的唯一标识
+        :param tasks: 节点名到任务列表的映射
+        :return: None
+        :raises SessionNotFoundError: 会话不存在时触发
+        """
+        session = self.require_session(graph_id)
+        with session.task_injection_lock:
+            for node_name, task_list in tasks.items():
+                session.injection_tasks[node_name] = task_list
+
+    def add_injection_terminations(self, graph_id: str, nodes: list[str]) -> None:
+        """
+        将前端提交的终止符注入目标追加到指定会话的待执行集合。
+
+        :param graph_id: 任务图实例的唯一标识
+        :param nodes: 待注入终止符的节点名列表
+        :return: None
+        :raises SessionNotFoundError: 会话不存在时触发
+        """
+        session = self.require_session(graph_id)
+        with session.task_injection_lock:
+            for node_name in nodes:
+                session.injection_terminations.add(str(node_name))
 
     # ==== Store Reads ====
-    def get_graph_meta_snapshot(self) -> tuple[int, dict[str, Any]]:
+    def get_graph_meta_snapshot(self, graph_id: str) -> tuple[int, dict[str, Any]]:
         """
-        原子读取图元信息缓存快照。
+        原子读取指定会话的图元信息缓存快照。
 
+        :param graph_id: 任务图实例的唯一标识
         :return: ``(rev, graph_meta_store)``
         :rtype: tuple[int, dict[str, Any]]
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.graph_meta_lock:
-            return self.store_revs["graph_meta"], copy.deepcopy(self.graph_meta_store)
+        session = self.require_session(graph_id)
+        with session.graph_meta_lock:
+            return (
+                session.store_revs["graph_meta"],
+                copy.deepcopy(session.graph_meta_store),
+            )
 
     def get_config(self) -> dict[str, Any]:
         """
@@ -237,67 +475,83 @@ class TaskWebServer:
         with self.config_lock:
             return self.config
 
-    def get_status_snapshot(self) -> tuple[int, float, dict[str, dict[str, Any]]]:
+    def get_status_snapshot(
+        self, graph_id: str
+    ) -> tuple[int, float, dict[str, dict[str, Any]]]:
         """
-        原子读取状态缓存快照。
+        原子读取指定会话的状态缓存快照。
 
+        :param graph_id: 任务图实例的唯一标识
         :return: ``(rev, timestamp, status_store)``
         :rtype: tuple[int, float, dict[str, dict[str, Any]]]
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.status_lock:
+        session = self.require_session(graph_id)
+        with session.status_lock:
             return (
-                self.store_revs["status"],
-                self.status_timestamp,
-                copy.deepcopy(self.status_store),
+                session.store_revs["status"],
+                session.status_timestamp,
+                copy.deepcopy(session.status_store),
             )
 
-    def get_errors_snapshot(self) -> tuple[int, list[dict[str, Any]]]:
+    def get_errors_snapshot(self, graph_id: str) -> tuple[int, list[dict[str, Any]]]:
         """
-        原子读取错误缓存快照。
+        原子读取指定会话的错误缓存快照。
 
+        :param graph_id: 任务图实例的唯一标识
         :return: ``(rev, errors)``
         :rtype: tuple[int, list[dict[str, Any]]]
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.errors_lock:
-            return self.store_revs["errors"], load_records(self.records_db_path)
+        session = self.require_session(graph_id)
+        with session.errors_lock:
+            return session.store_revs["errors"], load_records(session.records_db_path)
 
     def get_server_state(self, graph_id: str) -> dict[str, Any]:
         """
-        同步 graph 上下文并返回 reporter 同步决策所需的服务端状态。
+        创建或刷新 graph 会话，并返回 reporter 同步决策所需的服务端状态。
 
-        该方法会先调用 ``sync_graph_context`` 切换 graph 上下文（有副作用），
-        再返回当前 graph 对应的图元信息与错误缓存摘要。
+        与旧实现不同，这里不再迁移"当前图"所有权：每个 graph_id 拥有独立会话，
+        重复调用不会清空任何既有缓存。
 
         :param graph_id: reporter 当前任务图实例的唯一标识
         :return: 服务端同步状态摘要字典
         :rtype: dict[str, Any]
         """
-        is_current_graph = self.sync_graph_context(graph_id)
-        with self.graph_meta_lock:
-            has_graph_meta = bool(self.graph_meta_store["nodes"])
+        session = self.ensure_session(graph_id)
+        with session.graph_meta_lock:
+            has_graph_meta = bool(session.graph_meta_store["nodes"])
+        with session.status_lock:
+            has_status = bool(session.status_store)
         return {
+            "graph_id": session.graph_id,
             "interval": self.report_interval,
-            "is_current_graph": is_current_graph,
             "has_graph_meta": has_graph_meta,
-            "max_event_id_in_fail": self.get_max_event_id_in_fail(),
+            "has_status": has_status,
+            "alive": session.alive,
+            "max_event_id_in_fail": self.get_max_event_id_in_fail(graph_id),
         }
 
-    def get_injection(self) -> dict[str, Any]:
+    def get_injection(self, graph_id: str) -> dict[str, Any]:
         """
-        原子取出并清空待注入任务与终止符。
+        原子取出并清空指定会话的待注入任务与终止符。
 
+        :param graph_id: 任务图实例的唯一标识
         :return: ``{"tasks": dict[str, list[Any]], "terminations": list[str]}``
         :rtype: dict[str, Any]
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.task_injection_lock:
-            tasks = copy.deepcopy(self.injection_tasks)
-            terminations = sorted(self.injection_terminations)
-            self.injection_tasks = {}
-            self.injection_terminations = set()
+        session = self.require_session(graph_id)
+        with session.task_injection_lock:
+            tasks = copy.deepcopy(session.injection_tasks)
+            terminations = sorted(session.injection_terminations)
+            session.injection_tasks = {}
+            session.injection_terminations = set()
             return {"tasks": tasks, "terminations": terminations}
 
     def get_errors_page(
         self,
+        graph_id: str,
         page: int,
         page_size: int,
         node: str,
@@ -305,8 +559,9 @@ class TaskWebServer:
         sort_order: str,
     ) -> tuple[int, int, int, list[dict[str, Any]]]:
         """
-        原子读取错误缓存版本号与分页结果。
+        原子读取指定会话的错误缓存版本号与分页结果。
 
+        :param graph_id: 任务图实例的唯一标识
         :param page: 请求页码
         :param page_size: 每页大小
         :param node: 节点名称过滤条件
@@ -314,36 +569,46 @@ class TaskWebServer:
         :param sort_order: 排序方式，支持 ``newest`` 或 ``oldest``
         :return: ``(rev, total, total_pages, page_items)``
         :rtype: tuple[int, int, int, list[dict[str, Any]]]
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.errors_lock:
-            rev = self.store_revs["errors"]
+        session = self.require_session(graph_id)
+        with session.errors_lock:
+            rev = session.store_revs["errors"]
             total, total_pages, page_items = query_records(
-                self.records_db_path, page, page_size, node, keyword, sort_order
+                session.records_db_path, page, page_size, node, keyword, sort_order
             )
             return rev, total, total_pages, page_items
 
-    def get_error_type_counts(self, node: str = "") -> tuple[int, list[dict[str, Any]]]:
+    def get_error_type_counts(
+        self, graph_id: str, node: str = ""
+    ) -> tuple[int, list[dict[str, Any]]]:
         """
-        原子读取错误缓存版本号与按错误类型聚合后的统计结果。
+        原子读取指定会话的错误缓存版本号与按错误类型聚合后的统计结果。
 
+        :param graph_id: 任务图实例的唯一标识
         :param node: 节点名称过滤条件；为空时统计全部节点
         :return: ``(rev, items)``
         :rtype: tuple[int, list[dict[str, Any]]]
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.errors_lock:
-            rev = self.store_revs["errors"]
-            items = query_error_type_counts(self.records_db_path, node=node)
+        session = self.require_session(graph_id)
+        with session.errors_lock:
+            rev = session.store_revs["errors"]
+            items = query_error_type_counts(session.records_db_path, node=node)
             return rev, items
 
-    def get_max_event_id_in_fail(self) -> int | None:
+    def get_max_event_id_in_fail(self, graph_id: str) -> int | None:
         """
-        原子读取当前错误缓存中失败记录的最大 ``event_id``。
+        原子读取指定会话错误缓存中失败记录的最大 ``event_id``。
 
+        :param graph_id: 任务图实例的唯一标识
         :return: 当前缓存中失败记录的最大 ``event_id``；若不存在失败记录则返回 ``None``
         :rtype: int | None
+        :raises SessionNotFoundError: 会话不存在时触发
         """
-        with self.errors_lock:
-            return get_max_event_id_in_fail(self.records_db_path)
+        session = self.require_session(graph_id)
+        with session.errors_lock:
+            return get_max_event_id_in_fail(session.records_db_path)
 
     # ==== Application Lifecycle ====
     def _setup_routes(self) -> None:

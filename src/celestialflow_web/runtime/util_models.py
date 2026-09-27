@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, Field
 
 
 class GraphMetaModel(BaseModel):
@@ -32,12 +32,24 @@ class ErrorsModel(BaseModel):
     errors: list[dict[str, Any]]
 
 
-class TaskInjectionModel(RootModel[dict[str, list[Any]]]):
-    """任务注入请求模型，格式为 {node_name: [tasklist]}"""
+class TaskInjectionModel(BaseModel):
+    """任务注入请求模型：按 graph 会话投递的 {node_name: [tasklist]} 映射"""
+
+    graph_id: str = ""  # 目标任务图会话标识
+    tasks: dict[str, list[Any]] = Field(default_factory=dict)  # 节点名到任务列表的映射
 
 
-class TerminationInjectionModel(RootModel[list[str]]):
-    """终止符注入请求模型，格式为 [node_name, ...]。"""
+class TerminationInjectionModel(BaseModel):
+    """终止符注入请求模型：按 graph 会话投递的节点名列表。"""
+
+    graph_id: str = ""  # 目标任务图会话标识
+    nodes: list[str] = Field(default_factory=list)  # 待注入终止符的节点名列表
+
+
+class SessionActionModel(BaseModel):
+    """会话级操作（shutdown / remove）请求模型"""
+
+    graph_id: str = ""  # 目标会话的任务图实例标识
 
 
 class DashboardConfigModel(BaseModel):

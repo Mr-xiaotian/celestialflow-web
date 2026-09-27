@@ -135,8 +135,64 @@ h1 {
 }
 
 /* ================================
+  🌟 会话控制（设置面板）
+=============================== */
+/* 会话设置项只有下拉框一个子元素，让其铺满整行 */
+.settings-item:has(> .session-select) {
+    grid-template-columns: 1fr;
+}
+
+/* 会话下拉框铺满整行 */
+.session-select {
+    width: 100%;
+    justify-self: stretch;
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--carbon-300);
+    background-color: var(--frost-0);
+    color: var(--carbon-900);
+    font-size: 0.8rem;
+    height: 1.75rem;
+}
+
+/* 移除按钮独占一行，在设置项容器内居中铺开 */
+.session-remove-btn {
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--carbon-300);
+    background-color: transparent;
+    color: var(--carbon-700);
+    cursor: pointer;
+    font-size: 0.8rem;
+    line-height: 1;
+}
+
+.session-remove-btn:hover:not(:disabled) {
+    background-color: var(--crimson-500);
+    border-color: var(--crimson-500);
+    color: var(--frost-0);
+}
+
+.session-remove-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.dark-theme .session-select {
+    background-color: var(--carbon-700);
+    color: var(--carbon-100);
+    border-color: var(--carbon-600);
+}
+
+.dark-theme .session-remove-btn {
+    border-color: var(--carbon-600);
+    color: var(--carbon-200);
+}
+
+/* ================================
   🌟 控制面板
-================================ */
+=============================== */
 /* 控制面板容器样式：相对定位，内部元素水平排列 */
 .control-panel {
     position: relative;

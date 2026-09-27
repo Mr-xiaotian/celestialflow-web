@@ -17,6 +17,24 @@ type ApiVersionedResponse<T> = {
   data: T | null; // 当 known_rev 未变化时可能返回 null
 };
 
+// ==== 会话：/api/pull_sessions ====
+
+/**
+ * 服务端持有的单个 graph 运行实例会话
+ *
+ * 多个任务图（通常位于不同进程或不同机器）可同时上报，前端按 graph_id 切换查看。
+ */
+export type GraphSession = {
+  graph_id: string; // 任务图实例唯一标识，形如 name@毫秒时间戳
+  name: string; // 任务图名称（graph_id 中 @ 之前的部分）
+  alive: boolean; // reporter 是否仍在运行
+  shutdown_reason: string | null; // 会话结束原因，alive 为 true 时为 null
+  created_at: number; // 会话创建时间（Unix 秒）
+  last_seen: number; // reporter 最近一次活跃时间（Unix 秒）
+  has_graph_meta: boolean; // 服务端是否已持有该会话的图元信息
+  has_status: boolean; // 服务端是否已持有该会话的节点状态
+};
+
 // ==== 节点状态：/api/pull_status ====
 
 /** 节点运行时状态快照定义（与后端 payload 的字段形状一致） */

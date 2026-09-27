@@ -2,11 +2,36 @@
  * 拓扑分析展示模块
  * 负责展示图元信息中的拓扑分析结果（如是否为 DAG、图模式等）；
  * 分析结果随图元信息由 loaders.ts 提供，本文件只读不拉。
+ *
+ * 另外展示当前会话的"最后活跃"时间：该值来自会话心跳而非图分析，
+ * 但仅与其余分析信息一同展示，图元信息尚未到达时整个卡片回退到占位提示。
  */
 
 import { t } from "./i18n.js";
 import { graphMeta } from "./loaders.js";
+import {
+  SESSION_SWITCH_EVENT,
+  SESSIONS_CHANGED_EVENT,
+  getActiveSession,
+} from "./sessions.js";
 import { escapeHtml, formatTimestamp, renderLabelWithTooltip } from "./utils.js";
+
+/**
+ * 构建"最后活跃"信息行。
+ *
+ * 没有活跃会话时返回空串，避免图分析卡片出现一行空值。
+ * @returns {string} 该行的 HTML 字符串；无会话时为空串
+ */
+function renderLastSeenRow(): string {
+  const session = getActiveSession();
+  if (!session) return "";
+  const lastSeen = formatTimestamp(session.last_seen);
+  return `
+    <div class="analysis-row">
+      <span class="analysis-label">${t("analysis.lastSeen")}</span>
+      <span class="analysis-value">${escapeHtml(lastSeen)}</span>
+    </div>`;
+}
 
 /**
  * 渲染分析信息面板
@@ -19,6 +44,7 @@ export function renderAnalysisInfo(): void {
 
   const analysis = graphMeta.analysis; // 分析结果随图元信息一次性到达
   if (!analysis) {
+    // 分析信息未到达时不展示任何行（含最后活跃），只回退到占位提示。
     container.innerHTML = `<div class="empty-placeholder">${t("analysis.noData")}</div>`;
     return;
   }
@@ -42,11 +68,6 @@ export function renderAnalysisInfo(): void {
     </div>
 
     <div class="analysis-row">
-      <span class="analysis-label">${t("analysis.startTime")}</span>
-      <span class="analysis-value">${startTimeText}</span>
-    </div>
-
-    <div class="analysis-row">
       <span class="analysis-label">${renderLabelWithTooltip("analysis.structType", "analysis.structTypeHelp")}</span>
       <span class="analysis-value">${escapeHtml(className)}</span>
     </div>
@@ -62,5 +83,20 @@ export function renderAnalysisInfo(): void {
       <span class="analysis-label">${t("analysis.layerCount")}</span>
       <span class="analysis-value">${layerCount}</span>
     </div>
+
+    <div class="analysis-row">
+      <span class="analysis-label">${t("analysis.startTime")}</span>
+      <span class="analysis-value">${startTimeText}</span>
+    </div>
+
+${renderLastSeenRow()}
   `;
 }
+
+// 会话切换或会话列表刷新（含心跳更新）后重绘，保证"最后活跃"不会僵住。
+document.addEventListener(SESSION_SWITCH_EVENT, () => {
+  renderAnalysisInfo();
+});
+document.addEventListener(SESSIONS_CHANGED_EVENT, () => {
+  renderAnalysisInfo();
+});

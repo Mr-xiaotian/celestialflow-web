@@ -63,24 +63,30 @@ def normalize_record(record: dict[str, Any]) -> dict[str, Any] | None:
     """
     将记录归一化为 sqlite 可写格式。
 
+    缺少 ``event_id`` / 必填字段或字段类型无法转换时返回 ``None``，
+    使调用方可以跳过单条脏数据，而不是中断整批写入。
+
     :param record: 原始记录字典
     :return: 可直接写入 sqlite 的参数字典，或 ``None``
     :rtype: dict[str, Any] | None
     """
-    event_id = record.get("event_id")
-    if event_id is None:
-        return None
+    try:
+        event_id = record.get("event_id")
+        if event_id is None:
+            return None
 
-    return {
-        "event_id": int(event_id),
-        "stage": str(record["stage"]),
-        "status": str(record["status"]),
-        "error_type": str(record.get("error_type", "") or ""),
-        "error_message": str(record.get("error_message", "") or ""),
-        "ts": float(record.get("ts", 0.0) or 0.0),
-        "task_json": json.dumps(record["task_json"], ensure_ascii=False),
-        "result_json": json.dumps(record.get("result_json"), ensure_ascii=False),
-    }
+        return {
+            "event_id": int(event_id),
+            "stage": str(record["stage"]),
+            "status": str(record["status"]),
+            "error_type": str(record.get("error_type", "") or ""),
+            "error_message": str(record.get("error_message", "") or ""),
+            "ts": float(record.get("ts", 0.0) or 0.0),
+            "task_json": json.dumps(record["task_json"], ensure_ascii=False),
+            "result_json": json.dumps(record.get("result_json"), ensure_ascii=False),
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def row_to_record_dict(row: sqlite3.Row) -> dict[str, Any]:

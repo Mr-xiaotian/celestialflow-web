@@ -17,3 +17,19 @@ class ConfigurationError(CelestialFlowWebError):
     """配置错误（参数非法、组合不支持等）"""
 
     pass
+
+
+# ==== 会话 ====
+
+
+class SessionNotFoundError(CelestialFlowWebError):
+    """请求的 graph 会话不存在（未建立或已被移除）"""
+
+    def __init__(self, graph_id: str) -> None:
+        """
+        初始化会话不存在异常。
+
+        :param graph_id: 请求中携带的任务图实例标识
+        """
+        self.graph_id: str = graph_id
+        super().__init__(f"graph session not found: {graph_id!r}")

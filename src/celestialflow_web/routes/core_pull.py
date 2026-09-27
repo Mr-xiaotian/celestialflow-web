@@ -4,11 +4,29 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from ..runtime.util_cal import normalize_errors_query
+from ..runtime.util_errors import SessionNotFoundError
 
 if TYPE_CHECKING:
     from ..server.core_server import TaskWebServer
+
+
+def _session_error(graph_id: str) -> JSONResponse:
+    """构造会话不存在时的统一 404 响应。
+
+    :param graph_id: 请求中携带的任务图实例标识
+    :return: 404 JSONResponse
+    """
+    return JSONResponse(
+        content={
+            "ok": False,
+            "error": "unknown graph_id",
+            "graph_id": graph_id,
+        },
+        status_code=404,
+    )
 
 
 def register(router: APIRouter, server: TaskWebServer) -> None:
@@ -19,22 +37,37 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
     """
 
     # ==== Reporter / Backend Pulls ====
-    @router.get("/api/pull_server_state")
-    def pull_server_state(graph_id: str = "") -> dict[str, Any]:
-        """返回 reporter 同步决策所需的服务端状态。
+    @router.get("/api/pull_server_state", response_model=None)
+    def pull_server_state(graph_id: str = "") -> dict[str, Any] | JSONResponse:
+        """创建或刷新 graph 会话，并返回 reporter 同步决策所需的服务端状态。
 
         :param graph_id: reporter 当前任务图实例的唯一标识
-        :return: {"interval": float, "is_current_graph": bool, "has_graph_meta": bool, "max_event_id_in_fail": int | None}
+        :return: {"graph_id": str, "interval": float, "has_graph_meta": bool, "has_status": bool, "alive": bool, "max_event_id_in_fail": int | None}
         """
+        if not graph_id:
+            return _session_error(graph_id)
         return server.get_server_state(graph_id)
 
-    @router.get("/api/pull_injection")
-    def pull_injection() -> dict[str, Any]:
-        """取出并清空待执行的前端注入任务与终止符。
+    @router.get("/api/pull_injection", response_model=None)
+    def pull_injection(graph_id: str = "") -> dict[str, Any] | JSONResponse:
+        """取出并清空指定会话待执行的前端注入任务与终止符。
 
+        :param graph_id: reporter 当前任务图实例的唯一标识
         :return: ``{"tasks": dict[str, list[Any]], "terminations": list[str]}``
         """
-        return server.get_injection()
+        try:
+            return server.get_injection(graph_id)
+        except SessionNotFoundError:
+            return _session_error(graph_id)
+
+    # ==== Sessions ====
+    @router.get("/api/pull_sessions")
+    def pull_sessions() -> list[dict[str, Any]]:
+        """返回服务端当前持有的全部 graph 会话摘要。
+
+        :return: 会话摘要列表，按创建时间倒序
+        """
+        return server.list_sessions()
 
     # ==== Frontend Pulls ====
     @router.get("/api/pull_config")
@@ -45,15 +78,19 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
         """
         return server.get_config()
 
-    @router.get("/api/pull_status")
-    def pull_status(known_rev: int = -1) -> dict[str, Any]:
+    @router.get("/api/pull_status", response_model=None)
+    def pull_status(graph_id: str = "", known_rev: int = -1) -> dict[str, Any] | JSONResponse:
         """
-        返回各节点运行状态；若版本未变则返回 data=null。
+        返回指定会话各节点运行状态；若版本未变则返回 data=null。
 
+        :param graph_id: 目标任务图实例的唯一标识
         :param known_rev: 客户端已知的版本号
         :return: {"rev": int, "timestamp": float, "data": dict | None}
         """
-        rev, status_timestamp, status_store = server.get_status_snapshot()
+        try:
+            rev, status_timestamp, status_store = server.get_status_snapshot(graph_id)
+        except SessionNotFoundError:
+            return _session_error(graph_id)
         if known_rev == rev:
             return {"rev": rev, "timestamp": status_timestamp, "data": None}
         return {
@@ -62,31 +99,37 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
             "data": status_store,
         }
 
-    @router.get("/api/pull_graph_meta")
-    def pull_graph_meta(known_rev: int = -1) -> dict[str, Any]:
+    @router.get("/api/pull_graph_meta", response_model=None)
+    def pull_graph_meta(graph_id: str = "", known_rev: int = -1) -> dict[str, Any] | JSONResponse:
         """
-        返回图元信息（结构 + 节点元信息 + 分析）；若版本未变则返回 data=null。
+        返回指定会话的图元信息（结构 + 节点元信息 + 分析）；若版本未变则返回 data=null。
 
+        :param graph_id: 目标任务图实例的唯一标识
         :param known_rev: 客户端已知的版本号
         :return: {"rev": int, "data": dict | None}
         """
-        rev, graph_meta_store = server.get_graph_meta_snapshot()
+        try:
+            rev, graph_meta_store = server.get_graph_meta_snapshot(graph_id)
+        except SessionNotFoundError:
+            return _session_error(graph_id)
         if known_rev == rev:
             return {"rev": rev, "data": None}
         return {"rev": rev, "data": graph_meta_store}
 
-    @router.get("/api/pull_errors")
+    @router.get("/api/pull_errors", response_model=None)
     def pull_errors(
+        graph_id: str = "",
         known_rev: int = -1,
         page: int = 1,
         page_size: int = 10,
         node: str = "",
         keyword: str = "",
         sort_order: str = "newest",
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | JSONResponse:
         """
-        返回错误日志分页数据；若版本未变则返回 data=null。
+        返回指定会话的错误日志分页数据；若版本未变则返回 data=null。
 
+        :param graph_id: 目标任务图实例的唯一标识
         :param known_rev: 客户端已知的版本号，默认 -1
         :param page: 页码，默认 1
         :param page_size: 每页大小，默认 10
@@ -102,13 +145,17 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
             normalized_keyword,
             normalized_sort_order,
         ) = normalize_errors_query(page, page_size, node, keyword, sort_order)
-        rev, total, total_pages, page_items = server.get_errors_page(
-            normalized_page,
-            normalized_page_size,
-            normalized_node,
-            normalized_keyword,
-            normalized_sort_order,
-        )
+        try:
+            rev, total, total_pages, page_items = server.get_errors_page(
+                graph_id,
+                normalized_page,
+                normalized_page_size,
+                normalized_node,
+                normalized_keyword,
+                normalized_sort_order,
+            )
+        except SessionNotFoundError:
+            return _session_error(graph_id)
 
         base = {
             "rev": rev,
@@ -122,16 +169,22 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
             return {**base, "data": None}
         return {**base, "data": page_items}
 
-    @router.get("/api/pull_error_type_counts")
-    def pull_error_type_counts(known_rev: int = -1, node: str = "") -> dict[str, Any]:
+    @router.get("/api/pull_error_type_counts", response_model=None)
+    def pull_error_type_counts(
+        graph_id: str = "", known_rev: int = -1, node: str = ""
+    ) -> dict[str, Any] | JSONResponse:
         """
-        返回按错误类型聚合后的统计结果；若版本未变则返回 data=null。
+        返回指定会话按错误类型聚合后的统计结果；若版本未变则返回 data=null。
 
+        :param graph_id: 目标任务图实例的唯一标识
         :param known_rev: 客户端已知的版本号，默认 -1
         :param node: 节点名称过滤，默认 ""
         :return: {"rev": int, "data": list[dict[str, Any]] | None}
         """
-        rev, items = server.get_error_type_counts(node)
+        try:
+            rev, items = server.get_error_type_counts(graph_id, node)
+        except SessionNotFoundError:
+            return _session_error(graph_id)
         if known_rev == rev:
             return {"rev": rev, "data": None}
         return {"rev": rev, "data": items}

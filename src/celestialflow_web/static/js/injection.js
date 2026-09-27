@@ -5,6 +5,7 @@
  */
 import { t } from "./i18n.js";
 import { nodeStatuses } from "./loaders.js";
+import { SESSION_SWITCH_EVENT, getActiveGraphId } from "./sessions.js";
 import { escapeHtml, switchToInjectionTab } from "./utils.js";
 // ======== 页面级状态 ========
 // 当前正在编辑的节点名称；未选择节点时为 null。
@@ -48,7 +49,10 @@ function getStatusIconSvg(isSuccess) {
         : '<svg class="status-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
 }
 /**
- * 渲染底部状态提示的完整 HTML。
+ * 渲染底部状态提示：图标用 SVG，文案用纯文本节点。
+ *
+ * 文案占位参数可能来自后端上报的节点名，因此绝不能走 innerHTML，
+ * 否则节点名中的 HTML 会被当作标签解析（DOM XSS）。
  *
  * @param {HTMLElement} statusDiv - 状态提示容器
  * @param {string} messageKey - 文案翻译键
@@ -57,7 +61,8 @@ function getStatusIconSvg(isSuccess) {
  * @returns {void}
  */
 function renderStatusMessage(statusDiv, messageKey, isSuccess, args = []) {
-    statusDiv.innerHTML = getStatusIconSvg(isSuccess) + t(messageKey, ...args);
+    statusDiv.innerHTML = getStatusIconSvg(isSuccess);
+    statusDiv.appendChild(document.createTextNode(t(messageKey, ...args)));
 }
 /** 获取节点搜索框。 */
 function getSearchInput() {
@@ -87,6 +92,12 @@ function getEditorButtons() {
 // 页面初始化后立即绑定交互并绘制首屏注入页。
 document.addEventListener("DOMContentLoaded", () => {
     setupEventListeners();
+    renderInjectionPage();
+});
+// 切换会话时清空草稿，避免把上一会话的任务注入到新会话。
+document.addEventListener(SESSION_SWITCH_EVENT, () => {
+    nodeDrafts = {};
+    currentNodeName = null;
     renderInjectionPage();
 });
 /**
@@ -525,7 +536,10 @@ async function handleInjectTermination() {
         const response = await fetch("/api/push_injection_terminations", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify([targetNode]),
+            body: JSON.stringify({
+                graph_id: getActiveGraphId(),
+                nodes: [targetNode],
+            }),
         });
         if (!response.ok)
             throw new Error(`HTTP ${response.status}`);
@@ -587,7 +601,10 @@ async function handleSubmit() {
         const response = await fetch("/api/push_injection_tasks", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+                graph_id: getActiveGraphId(),
+                tasks: payload,
+            }),
         });
         if (!response.ok)
             throw new Error(`HTTP ${response.status}`);

@@ -4,6 +4,7 @@
  */
 
 import { t } from "./i18n.js";
+import { SESSION_SWITCH_EVENT, getActiveGraphId, withGraphId } from "./sessions.js";
 import { escapeHtml } from "./utils.js";
 import type { ErrorTypeCount, ErrorTypeCountsPullResponse, NodeStatus } from "./types.js";
 
@@ -173,19 +174,24 @@ export function renderErrorTypeChart(): void {
  * @returns {Promise<boolean>} 当聚合结果发生变化时返回 true。
  */
 export async function loadErrorTypeCounts(forceReload: boolean = false): Promise<boolean> {
+  const graphId = getActiveGraphId();
+  if (!graphId) {
+    resetErrorTypeState();
+    return false;
+  }
   const filterEl = getErrorTypeNodeFilter();
   const node = filterEl?.value ?? "";
   const queryKey = node;
   const knownRev =
     forceReload || queryKey !== errorTypeCountsQueryKey ? -1 : errorTypeCountsRev;
   const seq = ++errorTypeRequestSeq;
-  const params = new URLSearchParams({
-    known_rev: String(knownRev),
+  const params = withGraphId({
+    known_rev: knownRev,
     node,
   });
 
   try {
-    const res = await fetch(`/api/pull_error_type_counts?${params.toString()}`);
+    const res = await fetch(`/api/pull_error_type_counts?${params}`);
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
@@ -241,6 +247,20 @@ export function populateErrorTypeNodeFilter(statuses: Record<string, NodeStatus>
   filterEl.value = previousValue;
 }
 
+/**
+ * 清空错误类型聚合状态，用于切换会话或回到空态。
+ *
+ * 必须同时重置 `errorTypeCountsRev` 与查询缓存键，避免沿用上一会话的
+ * 全局 rev 命中相同版本而拿到 `data:null`。
+ * @returns {void}
+ */
+function resetErrorTypeState(): void {
+  errorTypeRequestSeq += 1;
+  errorTypeCounts = [];
+  errorTypeCountsRev = -1;
+  errorTypeCountsQueryKey = "";
+}
+
 // 页面初始化后绑定筛选器事件。
 document.addEventListener("DOMContentLoaded", () => {
   const filterEl = getErrorTypeNodeFilter();
@@ -248,4 +268,10 @@ document.addEventListener("DOMContentLoaded", () => {
     await loadErrorTypeCounts(true);
     renderErrorTypeChart();
   });
+});
+
+// 切换会话时清空聚合状态并重绘图表。
+document.addEventListener(SESSION_SWITCH_EVENT, () => {
+  resetErrorTypeState();
+  renderErrorTypeChart();
 });

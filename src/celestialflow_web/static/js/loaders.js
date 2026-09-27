@@ -7,6 +7,7 @@
  * 契约类型见 types.d.ts；命名以 `load*` 开头的函数是唯一的网络入口。
  */
 import { calcGlobalPending, calcRemaining } from "./util_estimators.js";
+import { SESSION_SWITCH_EVENT, getActiveGraphId, withGraphId, } from "./sessions.js";
 // ==== 节点状态模型 ====
 export let nodeStatuses = {}; // 当前各节点运行状态
 export let lastNodeStatuses = {}; // 上一轮状态快照，用于计算增量
@@ -31,9 +32,16 @@ let graphMetaRequestSeq = 0; // 请求序列号，防止旧图元信息响应覆
  * @returns {Promise<boolean>} 当状态版本发生变化并成功更新时返回 `true`，否则返回 `false`。
  */
 export async function loadStatuses() {
+    const graphId = getActiveGraphId();
+    if (!graphId) {
+        resetLoaderState();
+        return false;
+    }
     try {
         const requestSeq = ++statusesRequestSeq; // 为当前状态请求分配递增序号
-        const res = await fetch(`/api/pull_status?known_rev=${statusRev}`);
+        const res = await fetch(`/api/pull_status?${withGraphId({ known_rev: statusRev })}`);
+        if (!res.ok)
+            return false;
         const body = (await res.json());
         if (requestSeq !== statusesRequestSeq)
             return false; // 丢弃已过时请求的返回结果
@@ -56,9 +64,16 @@ export async function loadStatuses() {
  * @returns {Promise<boolean>} 当版本发生变化并成功更新时返回 `true`，否则返回 `false`。
  */
 export async function loadGraphMeta() {
+    const graphId = getActiveGraphId();
+    if (!graphId) {
+        resetLoaderState();
+        return false;
+    }
     try {
         const requestSeq = ++graphMetaRequestSeq; // 为当前请求分配递增序号
-        const res = await fetch(`/api/pull_graph_meta?known_rev=${graphMetaRev}`);
+        const res = await fetch(`/api/pull_graph_meta?${withGraphId({ known_rev: graphMetaRev })}`);
+        if (!res.ok)
+            return false;
         const body = (await res.json());
         if (requestSeq !== graphMetaRequestSeq)
             return false; // 丢弃已过时请求的返回结果
@@ -73,6 +88,35 @@ export async function loadGraphMeta() {
         return false;
     }
 }
+/**
+ * 清空所有加载器累积状态，用于切换会话或回到空态。
+ *
+ * 版本号必须重置为 `-1`：服务端 rev 全局单调递增，切换会话后若沿用旧 rev，
+ * 可能恰好命中相同数字而拿到 `data:null`，导致页面静默空白。
+ * @returns {void}
+ */
+function resetLoaderState() {
+    statusesRequestSeq += 1; // 作废在途请求
+    graphMetaRequestSeq += 1;
+    nodeStatuses = {};
+    lastNodeStatuses = {};
+    nodeEstimates = {};
+    lastNodeEstimates = {};
+    statusRev = -1;
+    graphMetaRev = -1;
+    lastStatusTimestamp = 0;
+    graphMeta = {
+        nodes: [],
+        edges: {},
+        source_nodes: [],
+        node_meta: {},
+        analysis: null,
+    };
+}
+// 切换会话时清空累积状态，避免把上一个会话的状态/拓扑带到新会话。
+document.addEventListener(SESSION_SWITCH_EVENT, () => {
+    resetLoaderState();
+});
 /**
  * 基于同一快照内的原始计数与静态拓扑，刷新各节点的图级派生值
  *

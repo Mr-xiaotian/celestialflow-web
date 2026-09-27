@@ -4,7 +4,7 @@
  */
 
 import { t } from "./i18n.js";
-import { showSettingsSaveStatus } from "./main.js";
+import { showSettingsSaveStatus } from "./settings_status.js";
 import { ALL_CARD_IDS, CARD_META, DEFAULT_WEB_CONFIG, applyConfig, saveWebConfig, webConfig } from "./web_config.js";
 import type { DashboardColumnKey, DashboardLayout } from "./types.js";
 
@@ -30,9 +30,18 @@ function renderCard(cardId: string): HTMLElement {
   const el = document.createElement("div"); // 可拖拽卡片 DOM
   el.className = "layout-card";
   el.dataset.cardId = cardId;
-  el.innerHTML = `
-    <span class="layout-card-name">${name}</span>
-    <span class="layout-card-handle" aria-hidden="true">⠿</span>`;
+
+  const nameEl = document.createElement("span");
+  nameEl.className = "layout-card-name";
+  nameEl.textContent = name; // 用 textContent，避免把卡片 ID 当作 HTML 解析
+
+  const handleEl = document.createElement("span");
+  handleEl.className = "layout-card-handle";
+  handleEl.setAttribute("aria-hidden", "true");
+  handleEl.textContent = "⠿";
+
+  el.appendChild(nameEl);
+  el.appendChild(handleEl);
   return el;
 }
 

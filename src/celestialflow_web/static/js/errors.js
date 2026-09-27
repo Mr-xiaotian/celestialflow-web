@@ -4,8 +4,9 @@
  */
 import { t } from "./i18n.js";
 import { preloadInjectionDraftFromError } from "./injection.js";
-import { showSettingsSaveStatus } from "./main.js";
-import { formatTimestamp, format_repr } from "./utils.js";
+import { showSettingsSaveStatus } from "./settings_status.js";
+import { SESSION_SWITCH_EVENT, getActiveGraphId, withGraphId, } from "./sessions.js";
+import { formatTimestamp, formatRepr } from "./utils.js";
 import { DEFAULT_WEB_CONFIG, normalizeErrorColumns, saveWebConfig, webConfig } from "./web_config.js";
 const ERROR_COLUMN_META = {
     index: { labelKey: "errors.colIndex" },
@@ -40,6 +41,21 @@ export function setErrorSortOrder(value) {
 /** 重置错误日志到第一页（供设置面板跨模块写入） */
 export function resetErrorsPage() {
     currentPage = 1;
+}
+/**
+ * 清空错误日志累积状态，用于切换会话或回到空态。
+ *
+ * 必须同时重置 `errorsRev` 与查询缓存键：切换会话后沿用旧 rev 可能恰好与
+ * 服务端全局 rev 相同而拿到 `data:null`，导致表格静默空白。
+ * @returns {void}
+ */
+function resetErrorsState() {
+    errorsRequestSeq += 1; // 作废在途请求
+    errors = [];
+    currentPage = 1;
+    totalPages = 1;
+    errorsRev = -1;
+    lastQueryKey = "";
 }
 let totalPages = 1; // 总页数
 let errorsRev = -1; // 数据版本号，用于增量拉取
@@ -288,9 +304,9 @@ function createRetryCell(errorData) {
  */
 function createErrorCell(columnId, errorData, index) {
     const errorText = `${errorData.error_type}(${errorData.error_message})`;
-    const errorRepr = format_repr(errorText, 30);
+    const errorRepr = formatRepr(errorText, 30);
     const taskText = getErrorTaskText(errorData.task_json);
-    const taskRepr = format_repr(taskText, 30);
+    const taskRepr = formatRepr(taskText, 30);
     switch (columnId) {
         case "index":
             return createErrorTextCell("index", String(index));
@@ -326,6 +342,11 @@ function buildErrorsQueryKey(page, pageSizeValue, node, keyword, sortOrder) {
  * @returns {Promise<boolean>} 当后端返回了新的错误记录数据时返回 `true`，否则返回 `false`。
  */
 export async function loadErrors(forceReload = false) {
+    const graphId = getActiveGraphId();
+    if (!graphId) {
+        resetErrorsState();
+        return false;
+    }
     try {
         const node = nodeFilter.value.trim(); // 当前节点筛选值
         const keyword = (searchInput.value || "").trim(); // 当前关键词筛选值
@@ -333,15 +354,15 @@ export async function loadErrors(forceReload = false) {
         const knownRev = forceReload || queryKey !== lastQueryKey ? -1 : errorsRev; // 条件变化时强制全量拉取
         const requestSeq = ++errorsRequestSeq; // 为当前请求分配递增序号
         // 将分页、排序和筛选条件编码进查询参数。
-        const params = new URLSearchParams({
-            known_rev: String(knownRev),
-            page: String(currentPage),
-            page_size: String(pageSize),
+        const params = withGraphId({
+            known_rev: knownRev,
+            page: currentPage,
+            page_size: pageSize,
             node,
             keyword,
             sort_order: errorSortOrder,
         });
-        const res = await fetch(`/api/pull_errors?${params.toString()}`);
+        const res = await fetch(`/api/pull_errors?${params}`);
         if (!res.ok)
             return false;
         const data = (await res.json());
@@ -527,4 +548,9 @@ errorSortSelect.addEventListener("change", async () => {
     if (webConfig) {
         showSettingsSaveStatus((await saveWebConfig()) ? "settings.saveSuccess" : "settings.saveFailed");
     }
+});
+// 切换会话时清空错误日志累积状态，避免沿用上一会话的分页与版本号。
+document.addEventListener(SESSION_SWITCH_EVENT, () => {
+    resetErrorsState();
+    renderErrors();
 });
