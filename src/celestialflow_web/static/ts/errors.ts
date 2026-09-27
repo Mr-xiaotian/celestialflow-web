@@ -17,7 +17,6 @@ import type { ErrorColumnKey, ErrorData, ErrorsPullResponse, NodeStatus } from "
 
 type ErrorColumnMeta = {
   labelKey: string; // 列标题对应的国际化 key
-  headerClassName?: string; // 表头额外样式类
   cellClassName?: string; // 单元格额外样式类
 };
 
@@ -46,7 +45,7 @@ const ERROR_COLUMNS_ZONE_IDS = [
 // 全局状态
 export let errors: ErrorData[] = []; // 错误记录列表
 export let currentPage = 1; // 当前分页页码
-export let pageSize = 10; // 每页显示条数
+export let pageSize = 50; // 每页显示条数（默认值与 DEFAULT_WEB_CONFIG.errors.pageSize 保持一致）
 export let errorSortOrder: "newest" | "oldest" = "newest"; // 错误日志默认排序
 
 /** 设置错误日志每页条数（供设置面板与配置应用跨模块写入） */
@@ -298,9 +297,6 @@ export function renderErrorsTableHeader(): void {
   for (const columnId of visibleColumns) {
     const th = document.createElement("th");
     th.textContent = t(ERROR_COLUMN_META[columnId].labelKey);
-    if (ERROR_COLUMN_META[columnId].headerClassName) {
-      th.className = ERROR_COLUMN_META[columnId].headerClassName!;
-    }
     errorsTableHeadRow.appendChild(th);
   }
 }

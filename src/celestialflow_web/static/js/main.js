@@ -170,7 +170,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     // 切换刷新间隔：更新轮询频率并保存配置
     refreshSelect.addEventListener("change", async () => {
-        setRefreshRate(parseInt(refreshSelect.value));
+        const nextRate = Number.parseInt(refreshSelect.value, 10);
+        if (!Number.isFinite(nextRate) || nextRate <= 0) {
+            return; // 非法值（空串/非数字）不写入，避免 setInterval(fn, NaN) 退化为忙轮询
+        }
+        setRefreshRate(nextRate);
         config.global.refreshInterval = refreshRate;
         showSettingsSaveStatus(await saveWebConfig() ? "settings.saveSuccess" : "settings.saveFailed");
         syncAutoRefreshTimer();
@@ -283,46 +287,52 @@ function rerenderAllViews() {
  * @returns {Promise<void>}
  */
 async function refreshAll() {
-    // 并行获取节点状态、图元信息、错误日志（注意是异步 API 请求）
-    // - nodeStatuses 会被 loadStatuses 更新
-    // - graphMeta 会被 loadGraphMeta 更新
-    // - errors 会被 loadErrors 刷新为当前筛选结果并用于错误列表渲染
-    let [statusesChanged, graphMetaChanged, errorsChanged, errorTypeCountsChanged] = await Promise.all([
-        loadStatuses(), // 从后端拉取节点运行状态（处理数、等待数、失败数等），更新 nodeStatuses
-        loadGraphMeta(), // 拉取图元信息（拓扑 + 节点元信息 + 分析结果），更新 graphMeta
-        loadErrors(), // 获取当前分页与筛选条件下的错误记录，更新 errors
-        loadErrorTypeCounts(), // 获取错误类型聚合结果，更新仪表盘扇形图
-    ]);
-    // 图级派生指标由前端本地估算：必须在图元信息就绪后、渲染之前统一收口。
-    if (statusesChanged || graphMetaChanged) {
-        refreshNodeEstimates();
+    try {
+        // 并行获取节点状态、图元信息、错误日志（注意是异步 API 请求）
+        // - nodeStatuses 会被 loadStatuses 更新
+        // - graphMeta 会被 loadGraphMeta 更新
+        // - errors 会被 loadErrors 刷新为当前筛选结果并用于错误列表渲染
+        const [statusesChanged, graphMetaChanged, errorsChanged, errorTypeCountsChanged] = await Promise.all([
+            loadStatuses(), // 从后端拉取节点运行状态（处理数、等待数、失败数等），更新 nodeStatuses
+            loadGraphMeta(), // 拉取图元信息（拓扑 + 节点元信息 + 分析结果），更新 graphMeta
+            loadErrors(), // 获取当前分页与筛选条件下的错误记录，更新 errors
+            loadErrorTypeCounts(), // 获取错误类型聚合结果，更新仪表盘扇形图
+        ]);
+        // 图级派生指标由前端本地估算：必须在图元信息就绪后、渲染之前统一收口。
+        if (statusesChanged || graphMetaChanged) {
+            refreshNodeEstimates();
+        }
+        // 历史曲线依赖上一步算出的 nodeEstimates，因此延后到估算完成后再记录。
+        if (statusesChanged) {
+            appendStatusSnapshotToHistory(lastStatusTimestamp, nodeStatuses, nodeEstimates, lastNodeStatuses);
+        }
+        // 结构图依赖图元信息，也会用节点状态给节点着色。
+        if (statusesChanged || graphMetaChanged) {
+            renderMermaidStructure(nodeStatuses); // 左上结构图, 依赖节点信息与结构信息
+        }
+        // 分析信息随图元信息一同到达。
+        if (graphMetaChanged) {
+            renderAnalysisInfo(); // 左下分析信息
+        }
+        // 节点状态变化会联动影响多个区域：状态卡、筛选器、注入页、折线图和汇总卡。
+        if (statusesChanged) {
+            renderDashboard(); // 中间节点状态卡片
+            populateNodeFilter(nodeStatuses); // 错误筛选器
+            populateErrorTypeNodeFilter(nodeStatuses); // 错误类型卡片筛选器
+            renderInjectionPage(); // 注入页节点列表 + 当前节点编辑区
+            updateChartData(); // 右上折线图
+            renderSummary(); // 右下汇总数据
+        }
+        // 错误分页与筛选结果变更后再重绘错误表格。
+        if (errorsChanged) {
+            renderErrors(); // 错误表格
+        }
+        if (errorTypeCountsChanged) {
+            renderErrorTypeChart(); // 错误类型分布卡片
+        }
     }
-    // 历史曲线依赖上一步算出的 nodeEstimates，因此延后到估算完成后再记录。
-    if (statusesChanged) {
-        appendStatusSnapshotToHistory(lastStatusTimestamp, nodeStatuses, nodeEstimates, lastNodeStatuses);
-    }
-    // 结构图依赖图元信息，也会用节点状态给节点着色。
-    if (statusesChanged || graphMetaChanged) {
-        renderMermaidStructure(nodeStatuses); // 左上结构图, 依赖节点信息与结构信息
-    }
-    // 分析信息随图元信息一同到达。
-    if (graphMetaChanged) {
-        renderAnalysisInfo(); // 左下分析信息
-    }
-    // 节点状态变化会联动影响多个区域：状态卡、筛选器、注入页、折线图和汇总卡。
-    if (statusesChanged) {
-        renderDashboard(); // 中间节点状态卡片
-        populateNodeFilter(nodeStatuses); // 错误筛选器
-        populateErrorTypeNodeFilter(nodeStatuses); // 错误类型卡片筛选器
-        renderInjectionPage(); // 注入页节点列表 + 当前节点编辑区
-        updateChartData(); // 右上折线图
-        renderSummary(); // 右下汇总数据
-    }
-    // 错误分页与筛选结果变更后再重绘错误表格。
-    if (errorsChanged) {
-        renderErrors(); // 错误表格
-    }
-    if (errorTypeCountsChanged) {
-        renderErrorTypeChart(); // 错误类型分布卡片
+    catch (e) {
+        // 单轮刷新中的同步渲染异常不应冒泡成 unhandled rejection 并中断后续轮询。
+        console.error("刷新失败", e);
     }
 }

@@ -22,6 +22,7 @@ let activeGraphId = null; // 当前选中的会话标识，null 表示尚无会�
 let sessionsFetched = false; // 是否已完成首次拉取，用于区分"空列表"与"尚未拉取"
 let sessionsTimer = null;
 let requestSeq = 0; // 请求序号，防止慢响应覆盖新结果
+let lastSelectorKey = ""; // 选择器结构投影键（graph_id/name/alive），用于避免心跳更新时无谓重建 <select>
 /**
  * 读取当前选中的会话标识。
  *
@@ -152,11 +153,21 @@ export async function loadSessions() {
         if (seq !== requestSeq)
             return false;
         const changed = JSON.stringify(list) !== JSON.stringify(sessions);
+        const previousActive = activeGraphId;
         sessions = list;
         sessionsFetched = true;
         applyResolvedActive(resolveActiveSession(list));
-        renderSessionSelector();
-        document.dispatchEvent(new Event(SESSIONS_CHANGED_EVENT));
+        // 选择器只关心结构变化（会话增删、名字/存活态）与选中项变化；
+        // 心跳只更新 last_seen，不应每轮重建 <select>，否则会打断正在展开的下拉框。
+        const selectorKey = JSON.stringify(list.map((session) => [session.graph_id, session.name, session.alive]));
+        if (selectorKey !== lastSelectorKey || activeGraphId !== previousActive) {
+            lastSelectorKey = selectorKey;
+            renderSessionSelector();
+        }
+        // 完整列表变化（含 last_seen 心跳）才派发，供 analysis 卡片刷新"最后活跃"。
+        if (changed) {
+            document.dispatchEvent(new Event(SESSIONS_CHANGED_EVENT));
+        }
         return changed;
     }
     catch (e) {

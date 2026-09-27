@@ -170,7 +170,7 @@ export function refreshNodeEstimates(): void {
 
   const nextEstimates: Record<string, NodeEstimate> = {};
   for (const [name, status] of Object.entries(nodeStatuses)) {
-    const totalPending = totalPendingMap[name];
+    const totalPending = totalPendingMap[name] ?? 0;
     nextEstimates[name] = {
       total_tasks_pending: totalPending,
       total_remaining_time: calcRemaining(

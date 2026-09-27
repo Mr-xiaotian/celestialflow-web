@@ -518,7 +518,8 @@ export function applyConfig(): void {
   }
 
   // 应用错误日志每页条数
-  webConfig.errors.pageSize = webConfig.errors.pageSize || 10;
+  webConfig.errors.pageSize =
+    webConfig.errors.pageSize || DEFAULT_WEB_CONFIG.errors.pageSize;
   const eps = Number(webConfig.errors.pageSize); // 错误分页大小需要同步到运行时变量与下拉框
   if (Number.isFinite(eps) && eps > 0) {
     setErrorPageSize(eps);

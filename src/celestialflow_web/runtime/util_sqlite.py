@@ -137,21 +137,6 @@ def insert_record(conn: sqlite3.Connection, record: dict[str, Any]) -> bool:
     return True
 
 
-def clear_records(db_path: str | Path) -> None:
-    """
-    自行创建并关闭连接，直接清空数据库中的全部记录。
-
-    :param db_path: sqlite 数据库文件路径
-    :return: None
-    """
-    conn = connect_db(db_path)
-    try:
-        _ = conn.execute("DELETE FROM records")
-        conn.commit()
-    finally:
-        conn.close()
-
-
 def append_records(db_path: str | Path, records: Iterable[dict[str, Any]]) -> int:
     """
     自行创建并关闭连接，将给定记录列表追加写入数据库。
@@ -168,7 +153,9 @@ def append_records(db_path: str | Path, records: Iterable[dict[str, Any]]) -> in
             try:
                 if insert_record(conn, item):
                     inserted += 1
-            except sqlite3.IntegrityError:
+            except sqlite3.Error:
+                # 单条记录写入失败（约束/类型等）不应中断整批，
+                # 已成功插入的记录仍会在下方统一提交。
                 continue
         conn.commit()
         return inserted

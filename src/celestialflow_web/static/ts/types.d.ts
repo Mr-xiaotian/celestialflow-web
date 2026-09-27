@@ -40,6 +40,7 @@ export type GraphSession = {
 /** 节点运行时状态快照定义（与后端 payload 的字段形状一致） */
 export type NodeStatus = {
   status: number; // 状态码：0-未运行, 1-运行中, 2-已停止
+  tasks_input: number; // 输入任务总数（外部注入与上游提供之和）
   tasks_processed: number; // 已处理任务总数
   tasks_pending: number; // 队列中等待的任务数
   tasks_succeeded: number; // 成功处理的任务数
@@ -67,6 +68,7 @@ type NodeMeta = {
 /** 图拓扑分析结果，随图元信息一次性到达 */
 type AnalysisData = {
   name: string; // 任务图名称
+  graphId: string; // 任务图实例唯一标识
   startTime: number; // 任务图启动时间戳
   className: string; // 图结构分类名称
   isDAG: boolean; // 当前任务图是否为 DAG

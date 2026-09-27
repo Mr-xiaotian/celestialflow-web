@@ -6,6 +6,7 @@
 
 import { nodeEstimates, nodeStatuses } from "./loaders.js";
 import { formatDuration, formatLargeNumber, switchToErrorsTab } from "./utils.js";
+import { webConfig } from "./web_config.js";
 
 // DOM 元素引用（汇总面板）
 const totalSucceeded = document.getElementById("total-succeeded") as HTMLElement;
@@ -25,7 +26,16 @@ const totalRemain = document.getElementById("total-remain") as HTMLElement;
 export function renderSummary(): void {
   const statusList = Object.values(nodeStatuses || {}); // 当前全部节点状态快照
   const total_succeeded = statusList.reduce((sum, status) => sum + (status.tasks_succeeded || 0), 0); // 总成功任务数
-  const total_pending = statusList.reduce((sum, status) => sum + (status.tasks_pending || 0), 0); // 总等待任务数
+  // 总等待口径需与状态卡一致：全局模式取图级估算，否则取本节点队列值。
+  const useGlobalPending = webConfig.dashboard.useTotalPendingInStatus;
+  const total_pending = Object.entries(nodeStatuses || {}).reduce(
+    (sum, [name, status]) =>
+      sum +
+      (useGlobalPending
+        ? Number(nodeEstimates[name]?.total_tasks_pending || 0)
+        : Number(status.tasks_pending || 0)),
+    0,
+  ); // 总等待任务数
   const total_failed = statusList.reduce((sum, status) => sum + (status.tasks_failed || 0), 0); // 总失败任务数
   const total_skipped = statusList.reduce((sum, status) => sum + (status.tasks_skipped || 0), 0); // 总跳过任务数
   const total_nodes = statusList.reduce((sum, status) => sum + (status.status === 1 ? 1 : 0), 0); // 当前运行中的节点数

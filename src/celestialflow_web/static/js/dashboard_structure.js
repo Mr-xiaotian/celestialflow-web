@@ -7,14 +7,42 @@
 import { t } from "./i18n.js";
 import { graphMeta, lastNodeStatuses } from "./loaders.js";
 import { webConfig } from "./web_config.js";
-/** Mermaid 节点形状，取值由 `getNodeShape` 决定 */
 /**
- * 获取节点的唯一标识符 ID
- * @param {string} nodeName - 节点名称。
- * @returns {string} 替换非单词字符后的节点 ID
+ * 为全部节点名分配唯一且 Mermaid 合法的 ID。
+ *
+ * 直接做 `\W+ → _` 会让 `a-b` / `a b` / `a.b` 碰撞成同一 ID，
+ * 因此清洗后再按需追加序号保证唯一，并把映射固定下来供节点与边共用。
+ * @param {string[]} nodeNames - 全量节点名（按展示顺序）
+ * @returns {Map<string, string>} 节点名到 Mermaid ID 的映射
  */
-function getNodeId(nodeName) {
-    return nodeName.replace(/\W+/g, "_");
+function buildNodeIdMap(nodeNames) {
+    const map = new Map();
+    const used = new Set();
+    for (const name of nodeNames) {
+        if (map.has(name))
+            continue;
+        const base = name.replace(/\W+/g, "_") || "node";
+        let id = base;
+        let suffix = 1;
+        while (used.has(id)) {
+            id = `${base}_${suffix}`;
+            suffix += 1;
+        }
+        used.add(id);
+        map.set(name, id);
+    }
+    return map;
+}
+/**
+ * 将节点名转义为 Mermaid 标签文本。
+ *
+ * Mermaid 用 `#...;` 表示实体，标签内的 `#` 与 `"` 必须先转义，
+ * 否则节点名会截断标签或注入 Mermaid 指令。
+ * @param {string} text - 原始节点名
+ * @returns {string} 可安全嵌入双引号标签的文本
+ */
+function escapeMermaidLabel(text) {
+    return text.replace(/#/g, "#35;").replace(/"/g, "#quot;");
 }
 /**
  * 根据节点类名推导 Mermaid 形状类型
@@ -39,13 +67,14 @@ function getNodeShape(className) {
  * @returns {string} 包含形状定义的 Mermaid 节点标签
  */
 function getShapeWrappedLabel(label, shape) {
+    const quoted = `"${escapeMermaidLabel(label)}"`; // 双引号包裹以容纳空格/符号，内部已转义
     switch (shape) {
         case "rhombus": // Diamond (decision)
-            return `{{${label}}}`;
+            return `{{${quoted}}}`;
         case "subgraph": // Subroutine / Module block
-            return `[[${label}]]`;
+            return `[[${quoted}]]`;
         case "box": // Default rectangular box
-            return `[${label}]`;
+            return `[${quoted}]`;
     }
 }
 /**
@@ -93,9 +122,10 @@ linkStyle default stroke:#999,stroke-width:1.5px;
         ...source_nodes.filter((name) => nodes.includes(name)),
         ...nodeNames.filter((name) => !source_nodes.includes(name)),
     ]; // 优先把源节点放前面，增强拓扑图可读性
+    const nodeIdMap = buildNodeIdMap(orderedNodeNames); // 节点名 → 唯一 Mermaid ID，节点与边共用
     // 先生成节点定义和节点样式，再生成边，便于后续统一拼接 Mermaid 代码。
     for (const nodeName of orderedNodeNames) {
-        const id = getNodeId(nodeName);
+        const id = nodeIdMap.get(nodeName);
         const statusInfo = statuses[nodeName]; // 当前节点的运行态，用于上色
         nodeLabels.set(id, getShapeWrappedLabel(nodeName, getNodeShape(node_meta[nodeName]?.class_name)));
         let statusClass = "whiteNode"; // 默认样式为普通白色节点
@@ -111,12 +141,12 @@ linkStyle default stroke:#999,stroke-width:1.5px;
     for (const [fromName, toNames] of Object.entries(edges)) {
         if (!nodes.includes(fromName))
             continue;
-        const fromId = getNodeId(fromName);
+        const fromId = nodeIdMap.get(fromName);
         const statusInfo = statuses[fromName];
         for (const toName of toNames) {
             if (!nodes.includes(toName))
                 continue;
-            const toId = getNodeId(toName);
+            const toId = nodeIdMap.get(toName);
             let edgeLabel = ""; // Mermaid 边标签，默认空字符串
             const toCount = statusInfo?.downstream_counts?.[toName] || 0; // 该上游发往此下游的累计任务数
             if (webConfig.dashboard.structureEdgeLabel === "delta") {
