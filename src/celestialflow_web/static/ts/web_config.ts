@@ -56,7 +56,7 @@ export const DEFAULT_WEB_CONFIG: WebConfig = {
     pageSize: 50,
     sortOrder: "newest",
     jumpToInjectionAfterRetry: true,
-    columns: ["index", "event_id", "message", "stage", "task", "time", "retry"],
+    columns: ["index", "event_id", "message", "node", "task", "time", "retry"],
   },
   injection: {
     showInjectableOnly: true,

@@ -15,7 +15,7 @@ const ERROR_COLUMN_META = {
         labelKey: "errors.colMessage",
         cellClassName: "error-cell",
     },
-    stage: { labelKey: "errors.colNode" },
+    node: { labelKey: "errors.colNode" },
     task: { labelKey: "errors.colTask" },
     time: { labelKey: "errors.colTime" },
     retry: { labelKey: "errors.colRetry" },
@@ -279,7 +279,7 @@ function createRetryCell(errorData) {
     action.textContent = retryLabel;
     if (canRetry) {
         const retryFromCurrentError = () => {
-            preloadInjectionDraftFromError(errorData.stage, errorData.task_json, webConfig.errors.jumpToInjectionAfterRetry);
+            preloadInjectionDraftFromError(errorData.node, errorData.task_json, webConfig.errors.jumpToInjectionAfterRetry);
         };
         action.addEventListener("click", retryFromCurrentError);
         action.addEventListener("keydown", (event) => {
@@ -311,8 +311,8 @@ function createErrorCell(columnId, errorData, index) {
             return createErrorTextCell("event_id", String(errorData.event_id));
         case "message":
             return createErrorTextCell("message", errorRepr, errorText);
-        case "stage":
-            return createErrorTextCell("stage", errorData.stage);
+        case "node":
+            return createErrorTextCell("node", errorData.node);
         case "task":
             return createErrorTextCell("task", taskRepr, taskText);
         case "time":

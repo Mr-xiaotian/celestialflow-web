@@ -41,7 +41,7 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             event_id INTEGER NOT NULL,
             ts REAL,
-            stage TEXT NOT NULL,
+            node TEXT NOT NULL,
             status TEXT NOT NULL,
             error_type TEXT NOT NULL DEFAULT '',
             error_message TEXT NOT NULL DEFAULT '',
@@ -77,7 +77,7 @@ def normalize_record(record: dict[str, Any]) -> dict[str, Any] | None:
 
         return {
             "event_id": int(event_id),
-            "stage": str(record["stage"]),
+            "node": str(record["node"]),
             "status": str(record["status"]),
             "error_type": str(record.get("error_type", "") or ""),
             "error_message": str(record.get("error_message", "") or ""),
@@ -101,7 +101,7 @@ def row_to_record_dict(row: sqlite3.Row) -> dict[str, Any]:
         "id": int(row["id"]),
         "event_id": int(row["event_id"]),
         "ts": float(row["ts"]),
-        "stage": str(row["stage"]),
+        "node": str(row["node"]),
         "status": str(row["status"]),
         "error_type": str(row["error_type"]),
         "error_message": str(row["error_message"]),
@@ -126,10 +126,10 @@ def insert_record(conn: sqlite3.Connection, record: dict[str, Any]) -> bool:
     _ = conn.execute(
         """
         INSERT INTO records (
-            event_id, ts, stage, status, error_type, error_message, task_json, result_json
+            event_id, ts, node, status, error_type, error_message, task_json, result_json
         )
         VALUES (
-            :event_id, :ts, :stage, :status, :error_type, :error_message, :task_json, :result_json
+            :event_id, :ts, :node, :status, :error_type, :error_message, :task_json, :result_json
         )
         """,
         normalized,
@@ -199,7 +199,7 @@ def load_records(db_path: str | Path, status: str = "failed") -> list[dict[str, 
     try:
         rows = conn.execute(
             """
-            SELECT id, event_id, ts, stage, status, error_type, error_message, task_json
+            SELECT id, event_id, ts, node, status, error_type, error_message, task_json
                  , result_json
             FROM records
             WHERE status = ?
@@ -239,7 +239,7 @@ def query_records(
         where_clauses: list[str] = ["status = ?"]
         params: list[Any] = [status]
         if node:
-            where_clauses.append("stage = ?")
+            where_clauses.append("node = ?")
             params.append(node)
         if keyword:
             like_pattern = f"%{keyword.lower()}%"
@@ -262,7 +262,7 @@ def query_records(
 
         rows = conn.execute(
             f"""
-            SELECT id, event_id, ts, stage, status, error_type, error_message, task_json
+            SELECT id, event_id, ts, node, status, error_type, error_message, task_json
                  , result_json
             FROM records
             {where_sql}
@@ -296,7 +296,7 @@ def query_error_type_counts(
         where_clauses: list[str] = ["status = ?"]
         params: list[Any] = [status]
         if node:
-            where_clauses.append("stage = ?")
+            where_clauses.append("node = ?")
             params.append(node)
 
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""

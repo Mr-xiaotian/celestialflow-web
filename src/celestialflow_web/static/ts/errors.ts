@@ -27,7 +27,7 @@ const ERROR_COLUMN_META: Record<ErrorColumnKey, ErrorColumnMeta> = {
     labelKey: "errors.colMessage",
     cellClassName: "error-cell",
   },
-  stage: { labelKey: "errors.colNode" },
+  node: { labelKey: "errors.colNode" },
   task: { labelKey: "errors.colTask" },
   time: { labelKey: "errors.colTime" },
   retry: { labelKey: "errors.colRetry" },
@@ -346,7 +346,7 @@ function createRetryCell(errorData: ErrorData): HTMLTableCellElement {
   if (canRetry) {
     const retryFromCurrentError = (): void => {
       preloadInjectionDraftFromError(
-        errorData.stage,
+        errorData.node,
         errorData.task_json,
         webConfig.errors.jumpToInjectionAfterRetry,
       );
@@ -386,8 +386,8 @@ function createErrorCell(
       return createErrorTextCell("event_id", String(errorData.event_id));
     case "message":
       return createErrorTextCell("message", errorRepr, errorText);
-    case "stage":
-      return createErrorTextCell("stage", errorData.stage);
+    case "node":
+      return createErrorTextCell("node", errorData.node);
     case "task":
       return createErrorTextCell("task", taskRepr, taskText);
     case "time":

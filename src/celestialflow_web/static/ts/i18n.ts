@@ -304,7 +304,7 @@ const translations: Record<Lang, Record<string, string>> = {
     "analysis.dagNo": "No (has cycles)",
     "analysis.graphMode": "Graph Mode",
     "analysis.graphModeHelp":
-      "The execution mode of the whole graph. serial starts stages sequentially, thread starts stages with threads, and async runs the graph asynchronously.",
+      "The execution mode of the whole graph. serial starts nodes sequentially, thread starts nodes with threads, and async runs the graph asynchronously.",
     "analysis.layerCount": "Layer Count",
     "status.noData": "No node data",
     "status.succeeded": "Succeeded",

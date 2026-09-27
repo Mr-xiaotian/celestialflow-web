@@ -60,7 +60,7 @@ export type StatusPullResponse = ApiVersionedResponse<Record<string, NodeStatus>
 
 /** 节点的构建期元信息，不进每轮状态快照 */
 type NodeMeta = {
-  class_name: string; // 节点类名（TaskStage/TaskSplitter/TaskRouter）
+  class_name: string; // 节点类名（TaskExecutor/TaskSplitter/TaskRouter）
   execution_mode: string; // 运行模式（serial/thread/async）
   max_workers: number; // 最大并发数
 };
@@ -97,7 +97,7 @@ export type GraphMetaPullResponse = ApiVersionedResponse<GraphMeta>; // 图元�
 /** 单条错误数据定义 */
 export type ErrorData = {
   ts: number; // 生命周期时间戳，单位为秒
-  stage: string; // 错误发生的节点/阶段名称，用于节点筛选
+  node: string; // 错误发生的节点名称，用于节点筛选
   event_id: number; // 失败事件的唯一标识 ID，全局唯一
   error_type: string; // 错误的分类类型，用于区分不同类别的错误
   error_message: string; // 错误的具体描述信息，是错误的详细文本内容
@@ -134,7 +134,7 @@ export type ErrorColumnKey =
   | "index"
   | "event_id"
   | "message"
-  | "stage"
+  | "node"
   | "task"
   | "time"
   | "retry"; // 错误日志表格可配置字段 key

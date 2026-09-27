@@ -3,7 +3,7 @@
         "theme": "light",
         "autoRefreshEnabled": true,
         "refreshInterval": 2000,
-        "language": "zh-CN"
+        "language": "en"
     },
     "dashboard": {
         "historyLimit": 20,
@@ -31,7 +31,7 @@
             "index",
             "event_id",
             "message",
-            "stage",
+            "node",
             "task",
             "time",
             "retry"

@@ -89,7 +89,7 @@ class ErrorsPageConfigModel(BaseModel):
             "index",
             "event_id",
             "message",
-            "stage",
+            "node",
             "task",
             "time",
             "retry",

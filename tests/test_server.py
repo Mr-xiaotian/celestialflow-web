@@ -41,7 +41,7 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
     raw_errors = [
         {
             "event_id": 1,
-            "stage": "s1",
+            "node": "s1",
             "status": "failed",
             "task_json": None,
         }
@@ -59,12 +59,12 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
     raw_graph_meta["nodes"].append("s2")
     raw_graph_meta["node_meta"]["s1"]["max_workers"] = 99
     raw_graph_meta["analysis"]["isDAG"] = False
-    raw_errors[0]["stage"] = "mutated"
+    raw_errors[0]["node"] = "mutated"
     status_snapshot["s1"]["tasks_succeeded"] = 88
     graph_meta_snapshot["nodes"].append("s2")
     graph_meta_snapshot["node_meta"]["s1"]["max_workers"] = 77
     graph_meta_snapshot["analysis"]["isDAG"] = False
-    errors_snapshot[0]["stage"] = "snapshot-mutated"
+    errors_snapshot[0]["node"] = "snapshot-mutated"
 
     _, status_timestamp_after, status_snapshot_after = web_server.get_status_snapshot(
         graph_id
@@ -78,7 +78,7 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
     assert graph_meta_snapshot_after["nodes"] == ["s1"]
     assert graph_meta_snapshot_after["node_meta"]["s1"]["max_workers"] == 1
     assert graph_meta_snapshot_after["analysis"]["isDAG"] is True
-    assert errors_snapshot_after[0]["stage"] == "s1"
+    assert errors_snapshot_after[0]["node"] == "s1"
 
 
 def test_get_error_type_counts_returns_grouped_stats(web_server):
@@ -90,7 +90,7 @@ def test_get_error_type_counts_returns_grouped_stats(web_server):
         [
             {
                 "event_id": 1,
-                "stage": "s1",
+                "node": "s1",
                 "status": "failed",
                 "task_json": {"value": 1},
                 "error_type": "ValueError",
@@ -99,7 +99,7 @@ def test_get_error_type_counts_returns_grouped_stats(web_server):
             },
             {
                 "event_id": 2,
-                "stage": "s2",
+                "node": "s2",
                 "status": "failed",
                 "task_json": {"value": 2},
                 "error_type": "TypeError",
@@ -108,7 +108,7 @@ def test_get_error_type_counts_returns_grouped_stats(web_server):
             },
             {
                 "event_id": 3,
-                "stage": "s1",
+                "node": "s1",
                 "status": "failed",
                 "task_json": {"value": 3},
                 "error_type": "ValueError",
@@ -136,7 +136,7 @@ def test_get_error_type_counts_supports_node_filter(web_server):
         [
             {
                 "event_id": 1,
-                "stage": "s1",
+                "node": "s1",
                 "status": "failed",
                 "task_json": {"value": 1},
                 "error_type": "ValueError",
@@ -145,7 +145,7 @@ def test_get_error_type_counts_supports_node_filter(web_server):
             },
             {
                 "event_id": 2,
-                "stage": "s1",
+                "node": "s1",
                 "status": "failed",
                 "task_json": {"value": 2},
                 "error_type": "TypeError",
@@ -154,7 +154,7 @@ def test_get_error_type_counts_supports_node_filter(web_server):
             },
             {
                 "event_id": 3,
-                "stage": "s2",
+                "node": "s2",
                 "status": "failed",
                 "task_json": {"value": 3},
                 "error_type": "RuntimeError",
@@ -561,7 +561,7 @@ def test_errors_pagination(client):
     test_errors = [
         {
             "event_id": i,
-            "stage": f"s{i%2}",
+            "node": f"s{i%2}",
             "status": "failed",
             "task_json": {"value": i, "label": f"task{i}"},
             "error_type": "ValueError" if i % 2 == 0 else "TypeError",
@@ -628,7 +628,7 @@ def test_pull_error_type_counts(client):
     test_errors = [
         {
             "event_id": 1,
-            "stage": "s1",
+            "node": "s1",
             "status": "failed",
             "task_json": {"value": 1},
             "error_type": "ValueError",
@@ -637,7 +637,7 @@ def test_pull_error_type_counts(client):
         },
         {
             "event_id": 2,
-            "stage": "s1",
+            "node": "s1",
             "status": "failed",
             "task_json": {"value": 2},
             "error_type": "TypeError",
@@ -646,7 +646,7 @@ def test_pull_error_type_counts(client):
         },
         {
             "event_id": 3,
-            "stage": "s2",
+            "node": "s2",
             "status": "failed",
             "task_json": {"value": 3},
             "error_type": "ValueError",
@@ -693,7 +693,7 @@ def test_push_errors_appends_for_same_graph(client):
     first_batch = [
         {
             "event_id": 1,
-            "stage": "s1",
+            "node": "s1",
             "status": "failed",
             "task_json": {"value": 1},
             "error_type": "ValueError",
@@ -702,7 +702,7 @@ def test_push_errors_appends_for_same_graph(client):
         },
         {
             "event_id": 2,
-            "stage": "s2",
+            "node": "s2",
             "status": "failed",
             "task_json": {"value": 2},
             "error_type": "TypeError",
@@ -713,7 +713,7 @@ def test_push_errors_appends_for_same_graph(client):
     second_batch = [
         {
             "event_id": 3,
-            "stage": "s1",
+            "node": "s1",
             "status": "failed",
             "task_json": {"value": 3},
             "error_type": "RuntimeError",
@@ -764,7 +764,7 @@ def test_push_errors_duplicate_append_is_idempotent(client):
     duplicated_batch = [
         {
             "event_id": 1,
-            "stage": "s1",
+            "node": "s1",
             "status": "failed",
             "task_json": {"value": 1},
             "error_type": "ValueError",
@@ -816,7 +816,7 @@ def test_sessions_are_isolated_and_coexist(client):
             "errors": [
                 {
                     "event_id": 1,
-                    "stage": "s1",
+                    "node": "s1",
                     "status": "failed",
                     "task_json": {"value": 1},
                     "error_type": "ValueError",
