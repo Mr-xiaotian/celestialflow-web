@@ -12,7 +12,7 @@ import { appendStatusSnapshotToHistory, initHistoryChart, trimNodeHistories, upd
 import { renderDashboard } from "./dashboard_statuses.js";
 import { renderMermaidStructure } from "./dashboard_structure.js";
 import { renderSummary } from "./dashboard_summary.js";
-import { loadErrors, populateNodeFilter, renderErrors, resetErrorsPage, setErrorPageSize } from "./errors.js";
+import { loadErrors, populateNodeFilter, renderErrors, renderErrorsTableHeader, resetErrorsPage, setErrorPageSize } from "./errors.js";
 import { applyI18nDOM, setLang, t } from "./i18n.js";
 import { refreshInjectionLocalizedText, renderInjectionPage, renderNodeList } from "./injection.js";
 // 只做副作用：该模块自行注册布局编辑器的 DOMContentLoaded 交互，无导出。
@@ -326,6 +326,7 @@ function rerenderAllViews(): void {
     renderDashboard();
     populateNodeFilter(nodeStatuses);
     populateErrorTypeNodeFilter(nodeStatuses);
+    renderErrorsTableHeader();
     renderErrors();
     renderAnalysisInfo();
     initHistoryChart();

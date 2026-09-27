@@ -3,7 +3,7 @@
         "theme": "light",
         "autoRefreshEnabled": true,
         "refreshInterval": 2000,
-        "language": "en"
+        "language": "zh-CN"
     },
     "dashboard": {
         "historyLimit": 20,
