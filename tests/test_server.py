@@ -5,8 +5,11 @@ from pathlib import Path
 from celestialflow_web.server.core_server import static_path
 
 
-def _push_graph_meta(client, graph_id: str):
+def _push_graph_meta(client, graph_id: str, name: str | None = None):
     """推送一份最小图元信息，用于建立 graph 会话；返回响应供调用方断言状态码。"""
+    analysis: dict = {"graphId": graph_id, "isDAG": True}
+    if name is not None:
+        analysis["name"] = name
     return client.post(
         "/api/push_graph_meta",
         json={
@@ -15,7 +18,7 @@ def _push_graph_meta(client, graph_id: str):
             "edges": {"s1": []},
             "source_nodes": ["s1"],
             "node_meta": {"s1": {"class_name": "TaskExecutor", "max_workers": 1}},
-            "analysis": {"graphId": graph_id, "isDAG": True},
+            "analysis": analysis,
         },
     )
 
@@ -841,19 +844,23 @@ def test_sessions_are_isolated_and_coexist(client):
 
 
 def test_pull_sessions_lists_all_sessions(client):
-    """会话列表接口返回全部会话摘要，并带 created_at 信息。"""
-    _ensure_session(client, "list_a@1000")
-    _ensure_session(client, "list_b@1000")
+    """会话列表返回全部会话；显示名在 graph_meta 到达后取自 analysis.name。"""
+    graph_a = "list_a"
+    graph_b = "list_b"
+    _ensure_session(client, graph_a)
+    _ensure_session(client, graph_b)
 
-    sessions = client.get("/api/pull_sessions").json()
-    ids = {item["graph_id"] for item in sessions}
+    by_id = {item["graph_id"]: item for item in client.get("/api/pull_sessions").json()}
+    assert {graph_a, graph_b} <= set(by_id)
+    # graph_meta 未到达前，以 graph_id 占位。
+    assert by_id[graph_a]["name"] == graph_a
+    assert by_id[graph_a]["alive"] is True
+    assert by_id[graph_a]["created_at"] > 0
 
-    assert {"list_a@1000", "list_b@1000"} <= ids
-    for item in sessions:
-        if item["graph_id"] in {"list_a@1000", "list_b@1000"}:
-            assert item["name"] in {"list_a", "list_b"}
-            assert item["alive"] is True
-            assert item["created_at"] > 0
+    # 推送携带 analysis.name 的 graph_meta 后，显示名被补齐。
+    assert _push_graph_meta(client, graph_a, name="list_a_named").status_code == 200
+    by_id = {item["graph_id"]: item for item in client.get("/api/pull_sessions").json()}
+    assert by_id[graph_a]["name"] == "list_a_named"
 
 
 def test_shutdown_session_marks_not_alive(client):

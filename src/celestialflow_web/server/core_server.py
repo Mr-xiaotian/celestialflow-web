@@ -65,8 +65,9 @@ class GraphSession:
     不同会话之间互不干扰；错误数据库在创建时使用 ``tempfile.mkstemp``
     手动管理文件描述符，避免 Windows 上自动删除与重打开冲突。
 
-    :param graph_id: 任务图实例的唯一标识
-    :param name: 任务图名称，取自 ``graph_id`` 中 ``@`` 之前的部分
+    :param graph_id: 任务图实例的唯一标识（不透明串）
+    :param name: 任务图名称；由 ``push_graph_meta`` 携带的 ``analysis.name`` 补齐，
+        未到达前等于 ``graph_id``
     """
 
     def __init__(self, graph_id: str, name: str) -> None:
@@ -262,6 +263,7 @@ class TaskWebServer:
         创建一个新的 graph 会话并登记到会话表。
 
         若已存在同 `graph_id` 的会话则直接返回既有实例，不会重建缓存。
+        显示名先以 `graph_id` 占位，待 ``push_graph_meta`` 到达后再补齐。
 
         :param graph_id: 任务图实例的唯一标识
         :return: 新建或既有的会话上下文
@@ -271,8 +273,7 @@ class TaskWebServer:
             existing = self.sessions.get(graph_id)
             if existing is not None:
                 return existing
-            name = graph_id.split("@", 1)[0]
-            session = GraphSession(graph_id=graph_id, name=name or graph_id)
+            session = GraphSession(graph_id=graph_id, name=graph_id)
             self.sessions[graph_id] = session
             return session
 
@@ -391,6 +392,13 @@ class TaskWebServer:
         with session.graph_meta_lock:
             session.graph_meta_store = copy.deepcopy(graph_meta)
             session.graph_meta_seen = True
+            # 图元信息里的 analysis.name 是本会话的权威显示名，到达即补齐。
+            analysis = cast(
+                dict[str, Any], session.graph_meta_store.get("analysis") or {}
+            )
+            name = analysis.get("name")
+            if isinstance(name, str) and name:
+                session.name = name
             session.store_revs["graph_meta"] = self._next_rev("graph_meta")
 
     def update_status_store(
