@@ -75,12 +75,12 @@ def test_reporter_write_refreshes_last_seen(web_server):
     assert session is not None
 
     session.last_seen = 0.0
-    web_server.update_status_store(session_id, 2.0, {"s1": {"status": 1}})
+    web_server.update_snapshot_store(session_id, 2.0, {"s1": {"status": 1}})
 
     assert session.last_seen > 0.0
 
 
-def test_status_push_dedups_unchanged_snapshot(client):
+def test_snapshot_push_dedups_unchanged(client):
     """相同快照重复推送不推进版本号，前端可继续拿到 data=null。"""
     session_id = "dedup@1"
     _push_graph_meta(client, session_id)
@@ -92,7 +92,7 @@ def test_status_push_dedups_unchanged_snapshot(client):
     }
     assert client.post("/api/push_snapshot", json=payload).status_code == 200
     first = client.get(
-        f"/api/pull_status?session_id={session_id}&known_rev=-1"
+        f"/api/pull_snapshot?session_id={session_id}&known_rev=-1"
     ).json()
     assert first["data"] == {"s1": {"status": 0}}
     rev = first["rev"]
@@ -102,7 +102,7 @@ def test_status_push_dedups_unchanged_snapshot(client):
         "/api/push_snapshot", json={**payload, "timestamp": 2.0}
     ).status_code == 200
     cached = client.get(
-        f"/api/pull_status?session_id={session_id}&known_rev={rev}"
+        f"/api/pull_snapshot?session_id={session_id}&known_rev={rev}"
     ).json()
     assert cached["rev"] == rev
     assert cached["data"] is None
@@ -113,7 +113,7 @@ def test_status_push_dedups_unchanged_snapshot(client):
         json={**payload, "snapshot": {"s1": {"status": 1}}},
     ).status_code == 200
     fresh = client.get(
-        f"/api/pull_status?session_id={session_id}&known_rev={rev}"
+        f"/api/pull_snapshot?session_id={session_id}&known_rev={rev}"
     ).json()
     assert fresh["rev"] != rev
     assert fresh["data"] == {"s1": {"status": 1}}
@@ -183,7 +183,7 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
     session_id = "iso@1000"
     web_server.create_session(session_id)
 
-    raw_status = {"s1": {"tasks_succeeded": 1, "total_remaining_time": 2.0}}
+    raw_snapshot = {"s1": {"tasks_succeeded": 1, "total_remaining_time": 2.0}}
     raw_graph_meta = {
         "graph": session_id,
         "graph_mode": "serial",
@@ -195,47 +195,31 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
         "source_nodes": ["s1"],
         "node_meta": {"s1": {"class_name": "TaskExecutor", "max_workers": 1}},
     }
-    raw_errors = [
-        {
-            "event_id": 1,
-            "node": "s1",
-            "status": "failed",
-            "task_json": None,
-        }
-    ]
 
-    web_server.update_status_store(session_id, 123.0, raw_status)
+    web_server.update_snapshot_store(session_id, 123.0, raw_snapshot)
     web_server.update_graph_meta_store(session_id, raw_graph_meta)
-    web_server.update_errors_store(session_id, raw_errors)
 
-    _, status_timestamp, status_snapshot = web_server.get_status_snapshot(session_id)
+    _, snapshot_timestamp, snapshot = web_server.get_snapshot(session_id)
     _, graph_meta_snapshot = web_server.get_graph_meta_snapshot(session_id)
-    _, errors_snapshot = web_server.get_errors_snapshot(session_id)
 
-    raw_status["s1"]["tasks_succeeded"] = 99
+    raw_snapshot["s1"]["tasks_succeeded"] = 99
     raw_graph_meta["nodes"].append("s2")
     raw_graph_meta["node_meta"]["s1"]["max_workers"] = 99
     raw_graph_meta["is_dag"] = False
-    raw_errors[0]["node"] = "mutated"
-    status_snapshot["s1"]["tasks_succeeded"] = 88
+    snapshot["s1"]["tasks_succeeded"] = 88
     graph_meta_snapshot["nodes"].append("s2")
     graph_meta_snapshot["node_meta"]["s1"]["max_workers"] = 77
     graph_meta_snapshot["is_dag"] = False
-    errors_snapshot[0]["node"] = "snapshot-mutated"
 
-    _, status_timestamp_after, status_snapshot_after = web_server.get_status_snapshot(
-        session_id
-    )
+    _, snapshot_timestamp_after, snapshot_after = web_server.get_snapshot(session_id)
     _, graph_meta_snapshot_after = web_server.get_graph_meta_snapshot(session_id)
-    _, errors_snapshot_after = web_server.get_errors_snapshot(session_id)
 
-    assert status_timestamp == 123.0
-    assert status_timestamp_after == 123.0
-    assert status_snapshot_after["s1"]["tasks_succeeded"] == 1
+    assert snapshot_timestamp == 123.0
+    assert snapshot_timestamp_after == 123.0
+    assert snapshot_after["s1"]["tasks_succeeded"] == 1
     assert graph_meta_snapshot_after["nodes"] == ["s1"]
     assert graph_meta_snapshot_after["node_meta"]["s1"]["max_workers"] == 1
     assert graph_meta_snapshot_after["is_dag"] is True
-    assert errors_snapshot_after[0]["node"] == "s1"
 
 
 def test_get_error_type_counts_returns_grouped_stats(web_server):
@@ -405,12 +389,12 @@ def test_config_api(client):
     assert "showInjectableOnly" in data["injection"]
 
 def test_server_state_seen_flags_track_writes_and_reset(client, web_server):
-    """has_status / has_graph_meta 反映服务端是否收到过写入，会话移除后不再列出。"""
+    """has_snapshot / has_graph_meta 反映服务端是否收到过写入，会话移除后不再列出。"""
     session_id = "seen@1000"
     web_server.create_session(session_id)
 
     summary = _session_summary(client, session_id)
-    assert summary["has_status"] is False
+    assert summary["has_snapshot"] is False
     assert summary["has_graph_meta"] is False
 
     push_resp = client.post(
@@ -425,7 +409,7 @@ def test_server_state_seen_flags_track_writes_and_reset(client, web_server):
     assert _push_graph_meta(client, session_id).status_code == 200
 
     summary = _session_summary(client, session_id)
-    assert summary["has_status"] is True
+    assert summary["has_snapshot"] is True
     assert summary["has_graph_meta"] is True
 
     # 会话被移除后不再出现在会话列表中。
@@ -471,8 +455,8 @@ def test_push_errors_meta_route_removed(client):
 
     assert response.status_code == 404
 
-def test_status_push_pull(client):
-    """测试状态同步链路：验证已知版本号（known_rev）下的增量拉取逻辑"""
+def test_snapshot_push_pull(client):
+    """测试状态快照同步链路：验证已知版本号（known_rev）下的增量拉取逻辑"""
     session_id = "demo@1000"
     assert _push_graph_meta(client, session_id).status_code == 200
 
@@ -498,7 +482,7 @@ def test_status_push_pull(client):
     assert push_resp.json() == {"ok": True}
 
     # 2. 拉取状态 (known_rev=-1)
-    pull_resp = client.get(f"/api/pull_status?session_id={session_id}&known_rev=-1")
+    pull_resp = client.get(f"/api/pull_snapshot?session_id={session_id}&known_rev=-1")
     assert pull_resp.status_code == 200
     pull_data = pull_resp.json()
     assert pull_data["rev"] > 0
@@ -509,7 +493,7 @@ def test_status_push_pull(client):
     # 3. 再次拉取相同版本 (known_rev=current_rev)
     current_rev = pull_data["rev"]
     pull_resp_cached = client.get(
-        f"/api/pull_status?session_id={session_id}&known_rev={current_rev}"
+        f"/api/pull_snapshot?session_id={session_id}&known_rev={current_rev}"
     )
     assert pull_resp_cached.json()["data"] is None
 
@@ -815,7 +799,7 @@ def test_pull_error_type_counts(client):
     assert resp_cached.json()["data"] is None
 
 
-def test_push_errors_appends_for_same_graph(client, web_server):
+def test_push_errors_appends_for_same_graph(client):
     """相同 session_id 下，push_error 只追加新错误。"""
     session_id = "demo@2000"
 
@@ -859,7 +843,10 @@ def test_push_errors_appends_for_same_graph(client, web_server):
     assert response.status_code == 200
     assert response.json() == {"ok": True}
 
-    assert web_server.get_max_event_id_in_fail(session_id) == 2
+    first_pulled = client.get(
+        f"/api/pull_errors?session_id={session_id}&page=1&page_size=10"
+    ).json()
+    assert first_pulled["total"] == 2
 
     response = _push_errors(client, session_id, second_batch)
     assert response.status_code == 200
@@ -988,7 +975,7 @@ def test_remove_session_drops_data_and_unknown_afterwards(client):
     assert remove_resp.json() == {"ok": True}
 
     # 会话已不存在：拉取返回 404，数据 push 返回 409。
-    assert client.get(f"/api/pull_status?session_id={session_id}").status_code == 404
+    assert client.get(f"/api/pull_snapshot?session_id={session_id}").status_code == 404
     assert (
         client.post(
             "/api/push_snapshot",
@@ -1003,7 +990,7 @@ def test_remove_session_drops_data_and_unknown_afterwards(client):
 
 def test_unknown_session_pulls_return_404(client):
     """未建立会话时，各前端拉取接口应返回 404 而非 500。"""
-    assert client.get("/api/pull_status?session_id=ghost@1000").status_code == 404
+    assert client.get("/api/pull_snapshot?session_id=ghost@1000").status_code == 404
     assert client.get("/api/pull_graph_meta?session_id=ghost@1000").status_code == 404
     assert client.get("/api/pull_errors?session_id=ghost@1000").status_code == 404
     assert (

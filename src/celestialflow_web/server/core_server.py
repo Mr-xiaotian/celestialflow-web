@@ -31,8 +31,6 @@ from ..runtime.util_models import WebConfigModel
 from ..runtime.util_sqlite import (
     append_records_on,
     connect_db,
-    get_max_event_id_in_fail,
-    load_records,
     query_error_type_counts,
     query_records,
 )
@@ -93,13 +91,13 @@ class GraphSession:
         self.session_id: str = session_id
         self.name: str = name
 
-        self.status_store: dict[str, dict[str, Any]] = {}
-        self.status_timestamp: float = 0.0
+        self.snapshot_store: dict[str, dict[str, Any]] = {}
+        self.snapshot_timestamp: float = 0.0
         self.graph_meta_store: dict[str, Any] = _empty_graph_meta()
         # 是否收到过对应 store 的写入。用显式标志而非“内容是否为空”判断，
         # 避免空图（无节点）被误判为从未收到图元信息而反复重推。
         self.graph_meta_seen: bool = False
-        self.status_seen: bool = False
+        self.snapshot_seen: bool = False
         self.injection_tasks: dict[str, list[Any]] = {}
         self.injection_terminations: set[str] = set()
 
@@ -119,14 +117,14 @@ class GraphSession:
             raise
 
         # 各类 store 的 rev + payload 需要原子读写，避免 pull 读到撕裂快照
-        self.status_lock: threading.Lock = threading.Lock()
+        self.snapshot_lock: threading.Lock = threading.Lock()
         self.graph_meta_lock: threading.Lock = threading.Lock()
         self.errors_lock: threading.Lock = threading.Lock()
         self.task_injection_lock: threading.Lock = threading.Lock()
 
         # 每次 push 时递增，pull 时对比，无变化则返回 null data
         self.store_revs: dict[str, int] = {
-            "status": 0,
+            "snapshot": 0,
             "graph_meta": 0,
             "errors": 0,
         }
@@ -147,8 +145,8 @@ class GraphSession:
         :return: 会话摘要字典
         :rtype: dict[str, Any]
         """
-        with self.status_lock:
-            has_status = self.status_seen
+        with self.snapshot_lock:
+            has_snapshot = self.snapshot_seen
         with self.graph_meta_lock:
             has_graph_meta = self.graph_meta_seen
         return {
@@ -159,7 +157,7 @@ class GraphSession:
             "created_at": self.created_at,
             "last_seen": self.last_seen,
             "has_graph_meta": has_graph_meta,
-            "has_status": has_status,
+            "has_snapshot": has_snapshot,
         }
 
     def close(self) -> None:
@@ -253,7 +251,7 @@ class TaskWebServer:
         # 数据版本号保留全局单调递增：任意会话的 push 都会推进全局 rev，
         # 因此前端切换会话后 known_rev 必然不相等，可直接拿到全量数据。
         self.store_revs: dict[str, int] = {
-            "status": 0,
+            "snapshot": 0,
             "graph_meta": 0,
             "errors": 0,
         }
@@ -469,7 +467,7 @@ class TaskWebServer:
         """
         推进并返回全局版本号计数器中指定键的值。
 
-        :param key: 版本号键，可选 ``status`` / ``graph_meta`` / ``errors``
+        :param key: 版本号键，可选 ``snapshot`` / ``graph_meta`` / ``errors``
         :return: 推进后的版本号
         :rtype: int
         """
@@ -498,34 +496,34 @@ class TaskWebServer:
                 session.name = name
             session.store_revs["graph_meta"] = self._next_rev("graph_meta")
 
-    def update_status_store(
-        self, session_id: str, timestamp: float, status: dict[str, dict[str, Any]]
+    def update_snapshot_store(
+        self, session_id: str, timestamp: float, snapshot: dict[str, dict[str, Any]]
     ) -> None:
         """
         原子更新指定会话的状态快照、时间戳及其版本号。
 
         内容与上次相同时不替换、不推进版本号：上报方现在每拍无条件推送，
         判重收敛到服务端，未变化的快照不会让前端拿到新 ``rev``
-        （即 ``pull_status`` 可继续返回 ``data=null``）。
+        （即 ``pull_snapshot`` 可继续返回 ``data=null``）。
 
         会话必须已存在（由图元信息注册）；无论内容是否变化，本次写入都会
         刷新活跃时间。
 
         :param session_id: 任务图实例的唯一标识
         :param timestamp: 当前状态快照对应的统一时间戳
-        :param status: 各节点状态快照
+        :param snapshot: 各节点状态快照
         :return: None
         :raises SessionNotFoundError: 会话不存在时触发
         """
         session = self.require_session(session_id)
         session.touch()
-        with session.status_lock:
-            if session.status_seen and session.status_store == status:
+        with session.snapshot_lock:
+            if session.snapshot_seen and session.snapshot_store == snapshot:
                 return
-            session.status_timestamp = timestamp
-            session.status_store = copy.deepcopy(status)
-            session.status_seen = True
-            session.store_revs["status"] = self._next_rev("status")
+            session.snapshot_timestamp = timestamp
+            session.snapshot_store = copy.deepcopy(snapshot)
+            session.snapshot_seen = True
+            session.store_revs["snapshot"] = self._next_rev("snapshot")
 
     def update_errors_store(self, session_id: str, errors: list[dict[str, Any]]) -> None:
         """
@@ -603,37 +601,24 @@ class TaskWebServer:
         with self.config_lock:
             return self.config
 
-    def get_status_snapshot(
+    def get_snapshot(
         self, session_id: str
     ) -> tuple[int, float, dict[str, dict[str, Any]]]:
         """
-        原子读取指定会话的状态缓存快照。
+        原子读取指定会话的状态快照。
 
         :param session_id: 任务图实例的唯一标识
-        :return: ``(rev, timestamp, status_store)``
+        :return: ``(rev, timestamp, snapshot_store)``
         :rtype: tuple[int, float, dict[str, dict[str, Any]]]
         :raises SessionNotFoundError: 会话不存在时触发
         """
         session = self.require_session(session_id)
-        with session.status_lock:
+        with session.snapshot_lock:
             return (
-                session.store_revs["status"],
-                session.status_timestamp,
-                copy.deepcopy(session.status_store),
+                session.store_revs["snapshot"],
+                session.snapshot_timestamp,
+                copy.deepcopy(session.snapshot_store),
             )
-
-    def get_errors_snapshot(self, session_id: str) -> tuple[int, list[dict[str, Any]]]:
-        """
-        原子读取指定会话的错误缓存快照。
-
-        :param session_id: 任务图实例的唯一标识
-        :return: ``(rev, errors)``
-        :rtype: tuple[int, list[dict[str, Any]]]
-        :raises SessionNotFoundError: 会话不存在时触发
-        """
-        session = self.require_session(session_id)
-        with session.errors_lock:
-            return session.store_revs["errors"], load_records(session.records_db_path)
 
     def get_injection(self, session_id: str) -> dict[str, Any]:
         """
@@ -699,19 +684,6 @@ class TaskWebServer:
             rev = session.store_revs["errors"]
             items = query_error_type_counts(session.records_db_path, node=node)
             return rev, items
-
-    def get_max_event_id_in_fail(self, session_id: str) -> int | None:
-        """
-        原子读取指定会话错误缓存中失败记录的最大 ``event_id``。
-
-        :param session_id: 任务图实例的唯一标识
-        :return: 当前缓存中失败记录的最大 ``event_id``；若不存在失败记录则返回 ``None``
-        :rtype: int | None
-        :raises SessionNotFoundError: 会话不存在时触发
-        """
-        session = self.require_session(session_id)
-        with session.errors_lock:
-            return get_max_event_id_in_fail(session.records_db_path)
 
     # ==== Application Lifecycle ====
     def _setup_routes(self) -> None:

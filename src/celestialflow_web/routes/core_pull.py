@@ -67,25 +67,25 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
         """
         return server.get_config()
 
-    @router.get("/api/pull_status", response_model=None)
-    def pull_status(session_id: str = "", known_rev: int = -1) -> dict[str, Any] | JSONResponse:
+    @router.get("/api/pull_snapshot", response_model=None)
+    def pull_snapshot(session_id: str = "", known_rev: int = -1) -> dict[str, Any] | JSONResponse:
         """
-        返回指定会话各节点运行状态；若版本未变则返回 data=null。
+        返回指定会话各节点运行状态快照；若版本未变则返回 data=null。
 
         :param session_id: 目标任务图实例的唯一标识
         :param known_rev: 客户端已知的版本号
         :return: {"rev": int, "timestamp": float, "data": dict | None}
         """
         try:
-            rev, status_timestamp, status_store = server.get_status_snapshot(session_id)
+            rev, snapshot_timestamp, snapshot_store = server.get_snapshot(session_id)
         except SessionNotFoundError:
             return _session_error(session_id)
         if known_rev == rev:
-            return {"rev": rev, "timestamp": status_timestamp, "data": None}
+            return {"rev": rev, "timestamp": snapshot_timestamp, "data": None}
         return {
             "rev": rev,
-            "timestamp": status_timestamp,
-            "data": status_store,
+            "timestamp": snapshot_timestamp,
+            "data": snapshot_store,
         }
 
     @router.get("/api/pull_graph_meta", response_model=None)

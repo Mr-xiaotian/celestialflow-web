@@ -159,8 +159,8 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
         """
         try:
-            server.update_status_store(
-                data.session_id, float(data.timestamp), data.snapshot
+            server.update_snapshot_store(
+                data.session_id, data.timestamp, data.snapshot
             )
         except SessionNotFoundError:
             return _session_error(data.session_id)
