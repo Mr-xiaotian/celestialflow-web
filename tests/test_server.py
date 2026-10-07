@@ -1,8 +1,12 @@
 # tests/test_server.py
 import re
+import time
 from pathlib import Path
 
-from celestialflow_web.server.core_server import static_path
+import pytest
+
+from celestialflow_web.runtime.util_errors import ConfigurationError
+from celestialflow_web.server.core_server import TaskWebServer, static_path
 
 
 def _push_graph_meta(client, session_id: str, name: str | None = None):
@@ -113,6 +117,65 @@ def test_status_push_dedups_unchanged_snapshot(client):
     ).json()
     assert fresh["rev"] != rev
     assert fresh["data"] == {"s1": {"status": 1}}
+
+
+def test_reaper_marks_idle_session_not_alive(web_server):
+    """长时间无写入的存活会话会被标记为已结束（idle_timeout）。"""
+    session_id = "idle@1"
+    web_server.create_session(session_id)
+    session = web_server.get_session(session_id)
+    assert session is not None
+    session.last_seen = time.time() - 10_000
+
+    web_server.reap_once()
+
+    assert session.alive is False
+    assert session.shutdown_reason == "idle_timeout"
+
+
+def test_reaper_removes_expired_session(web_server):
+    """超过保留期的会话会被彻底移除。"""
+    session_id = "expired@1"
+    web_server.create_session(session_id)
+    session = web_server.get_session(session_id)
+    assert session is not None
+    session.last_seen = time.time() - 10_000_000
+
+    web_server.reap_once()
+
+    assert web_server.get_session(session_id) is None
+
+
+def test_reaper_leaves_active_session(web_server):
+    """刚写入过的会话不会被回收。"""
+    session_id = "active@1"
+    web_server.create_session(session_id)
+
+    web_server.reap_once()
+
+    session = web_server.get_session(session_id)
+    assert session is not None
+    assert session.alive is True
+
+
+def test_reaper_honors_custom_thresholds():
+    """自定义阈值生效：超过保留期的会话被移除。"""
+    server = TaskWebServer(idle_timeout=1.0, retention=2.0)
+    session_id = "cfg@1"
+    server.create_session(session_id)
+    session = server.get_session(session_id)
+    assert session is not None
+    session.last_seen = time.time() - 3.0
+
+    server.reap_once()
+
+    assert server.get_session(session_id) is None
+
+
+def test_server_rejects_non_positive_thresholds():
+    """非正阈值会被拒绝。"""
+    with pytest.raises(ConfigurationError):
+        TaskWebServer(idle_timeout=0)
 
 
 def test_store_snapshot_methods_return_isolated_copies(web_server):

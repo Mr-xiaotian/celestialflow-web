@@ -5,6 +5,7 @@ import argparse
 import copy
 import logging
 import os
+import sqlite3
 import tempfile
 import threading
 import time
@@ -25,10 +26,10 @@ from fastapi.templating import (
 
 from ..routes import create_router
 from ..runtime.util_config import load_config
-from ..runtime.util_errors import SessionNotFoundError
+from ..runtime.util_errors import ConfigurationError, SessionNotFoundError
 from ..runtime.util_models import WebConfigModel
 from ..runtime.util_sqlite import (
-    append_records,
+    append_records_on,
     connect_db,
     get_max_event_id_in_fail,
     load_records,
@@ -43,6 +44,15 @@ logger = logging.getLogger("celestialflow_web.server")
 
 static_path = os.path.join(PACKAGE_DIR, "static")
 templates_path = os.path.join(PACKAGE_DIR, "templates")
+
+_DEFAULT_REAP_INTERVAL: float = 30.0
+"""会话回收线程的默认巡检间隔（秒）。"""
+
+_DEFAULT_SESSION_IDLE_TIMEOUT: float = 120.0
+"""默认空闲超时：超过该活跃间隔未收到上报写入的存活会话会被标记为已结束。"""
+
+_DEFAULT_SESSION_RETENTION: float = 6 * 3600.0
+"""默认保留期：超过该间隔未活跃的会话会被彻底移除。"""
 
 
 def _empty_graph_meta() -> dict[str, Any]:
@@ -98,9 +108,11 @@ class GraphSession:
         )
         os.close(fd)
         self.records_db_path: str = records_db_path
+        # 会话生命期内复用同一条连接：上报方现在逐条推送错误，
+        # 若每次写入都开/关连接会成为失败风暴下的瓶颈。
+        self.records_conn: sqlite3.Connection | None = None
         try:
-            conn = connect_db(self.records_db_path)
-            conn.close()
+            self.records_conn = connect_db(self.records_db_path)
         except Exception:
             # 建库失败时回收已创建的临时文件，避免留下无人引用的孤儿文件。
             self._remove_db_files()
@@ -151,7 +163,17 @@ class GraphSession:
         }
 
     def close(self) -> None:
-        """释放会话占用的临时错误数据库文件（含 WAL 旁路文件）。"""
+        """
+        关闭错误数据库连接并释放其临时文件（含 WAL 旁路文件）。
+
+        先关闭连接再删文件（Windows 上打开中的文件无法删除）；关闭在
+        ``errors_lock`` 内完成，确保没有在途写入仍在复用该连接。
+        """
+        with self.errors_lock:
+            conn = self.records_conn
+            self.records_conn = None
+            if conn is not None:
+                conn.close()
         self._remove_db_files()
 
     def _remove_db_files(self) -> None:
@@ -180,7 +202,13 @@ class TaskWebServer:
     """
 
     def __init__(
-        self, host: str = "0.0.0.0", port: int = 5000, log_level: str = "info"
+        self,
+        host: str = "0.0.0.0",
+        port: int = 5000,
+        log_level: str = "info",
+        reap_interval: float = _DEFAULT_REAP_INTERVAL,
+        idle_timeout: float = _DEFAULT_SESSION_IDLE_TIMEOUT,
+        retention: float = _DEFAULT_SESSION_RETENTION,
     ) -> None:
         """
         初始化 FastAPI 应用、会话容器、版本计数器及路由。
@@ -188,7 +216,20 @@ class TaskWebServer:
         :param host: 绑定主机地址，默认 "0.0.0.0"
         :param port: 绑定端口，默认 5000
         :param log_level: uvicorn 日志级别，默认 "info"
+        :param reap_interval: 会话回收巡检间隔（秒），默认 30
+        :param idle_timeout: 空闲超时（秒），默认 120；超时未写入的存活会话被标记为已结束
+        :param retention: 保留期（秒），默认 6 小时；超期未活跃的会话被彻底移除
+        :raises ConfigurationError: 任一阈值非正
         """
+        if reap_interval <= 0 or idle_timeout <= 0 or retention <= 0:
+            raise ConfigurationError(
+                "reap_interval / idle_timeout / retention must be positive, got "
+                f"{reap_interval!r}, {idle_timeout!r}, {retention!r}"
+            )
+        self.reap_interval: float = float(reap_interval)
+        self.idle_timeout: float = float(idle_timeout)
+        self.retention: float = float(retention)
+
         self.app: FastAPI = FastAPI(lifespan=self._lifespan)
         self.host: str = host
         self.port: int = port
@@ -204,6 +245,10 @@ class TaskWebServer:
 
         # 会话列表自身的增删由该锁保护；会话内部状态由各自 store 锁保护
         self.sessions_lock: threading.Lock = threading.Lock()
+
+        # 会话回收线程：仅在应用生命周期内启动（见 _lifespan）。
+        self._reaper_thread: threading.Thread | None = None
+        self._reaper_stop: threading.Event = threading.Event()
 
         # 数据版本号保留全局单调递增：任意会话的 push 都会推进全局 rev，
         # 因此前端切换会话后 known_rev 必然不相等，可直接拿到全量数据。
@@ -231,7 +276,7 @@ class TaskWebServer:
     @asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         """
-        应用生命周期钩子：进程退出时释放全部会话的临时数据库文件。
+        应用生命周期钩子：启动会话回收线程，退出时停止回收并释放全部会话的临时数据库文件。
 
         不使用该钩子时，`tempfile` 创建的会话库会随进程退出残留在磁盘上。
 
@@ -239,11 +284,15 @@ class TaskWebServer:
         :return: 异步上下文管理器，退出时为关闭阶段
         :rtype: AsyncGenerator[None]
         """
-        yield
-        # 关闭阶段：实例由 uvicorn 持有，通过 app.state 反查。
         server: TaskWebServer | None = getattr(app.state, "server", None)
         if server is not None:
-            server.close_all_sessions()
+            server.start_reaper()
+        try:
+            yield
+        finally:
+            if server is not None:
+                server.stop_reaper()
+                server.close_all_sessions()
 
     def close_all_sessions(self) -> None:
         """
@@ -256,6 +305,55 @@ class TaskWebServer:
             self.sessions.clear()
             for session in sessions:
                 session.close()
+
+    # ==== Session Reaper ====
+
+    def reap_once(self) -> None:
+        """
+        巡检一次：把长时间无写入的存活会话标记为已结束，并移除过期会话。
+
+        上报方主动 ``shutdown`` 的路径之外（例如上报进程崩溃、网络中断），
+        ``last_seen`` 会停止前进，本方法据此兜底：超过
+        :attr:`idle_timeout` 未活跃的存活会话会被标记为已结束
+        （原因 ``idle_timeout``），超过 :attr:`retention` 的会话则被
+        彻底移除，释放其内存缓存与临时错误库。
+        """
+        now = time.time()
+        with self.sessions_lock:
+            sessions = list(self.sessions.items())
+        for session_id, session in sessions:
+            age = now - session.last_seen
+            if session.alive and age > self.idle_timeout:
+                session.alive = False
+                session.shutdown_reason = "idle_timeout"
+            if age > self.retention:
+                self.remove_session(session_id)
+
+    def start_reaper(self) -> None:
+        """启动后台会话回收线程（若未运行）。"""
+        if self._reaper_thread is not None and self._reaper_thread.is_alive():
+            return
+        self._reaper_stop.clear()
+        self._reaper_thread = threading.Thread(
+            target=self._reaper_loop, name="session-reaper", daemon=True
+        )
+        self._reaper_thread.start()
+
+    def stop_reaper(self) -> None:
+        """停止后台会话回收线程并等待其退出。"""
+        if self._reaper_thread is None:
+            return
+        self._reaper_stop.set()
+        self._reaper_thread.join(timeout=5)
+        self._reaper_thread = None
+
+    def _reaper_loop(self) -> None:
+        """后台回收循环：按 :attr:`reap_interval` 固定间隔巡检一次。"""
+        while not self._reaper_stop.wait(self.reap_interval):
+            try:
+                self.reap_once()
+            except Exception:
+                logger.exception("session reaper iteration failed")
 
     # ==== Session Lifecycle ====
     def create_session(self, session_id: str) -> GraphSession:
@@ -443,7 +541,11 @@ class TaskWebServer:
         session = self.require_session(session_id)
         session.touch()
         with session.errors_lock:
-            _ = append_records(session.records_db_path, errors)
+            conn = session.records_conn
+            if conn is None:
+                # 会话在本次写入前已被回收。
+                raise SessionNotFoundError(session_id)
+            _ = append_records_on(conn, errors)
             session.store_revs["errors"] = self._next_rev("errors")
 
     def add_injection_tasks(self, session_id: str, tasks: dict[str, list[Any]]) -> None:
@@ -629,8 +731,22 @@ class TaskWebServer:
         uvicorn.run(self.app, host=self.host, port=self.port, log_level=self.log_level)
 
 
+def _positive_float(value: str) -> float:
+    """argparse 用的正浮点解析器。
+
+    :param value: 命令行原始字符串
+    :return: 解析出的正浮点数
+    :rtype: float
+    :raises argparse.ArgumentTypeError: 无法解析或非正
+    """
+    parsed = float(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"must be positive, got {value!r}")
+    return parsed
+
+
 def parse_args() -> argparse.Namespace:
-    """解析命令行参数：--host、--port、--log-level。"""
+    """解析命令行参数：--host、--port、--log-level、--reap-interval、--idle-timeout、--retention。"""
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         prog="task-web",
         description="CelestialFlow Task Web Monitor Server",
@@ -657,6 +773,33 @@ def parse_args() -> argparse.Namespace:
         help="Uvicorn log level",
     )
 
+    _ = parser.add_argument(
+        "--reap-interval",
+        type=_positive_float,
+        default=_DEFAULT_REAP_INTERVAL,
+        help=f"Session reaper scan interval in seconds (default: {_DEFAULT_REAP_INTERVAL:g})",
+    )
+
+    _ = parser.add_argument(
+        "--idle-timeout",
+        type=_positive_float,
+        default=_DEFAULT_SESSION_IDLE_TIMEOUT,
+        help=(
+            "Idle timeout in seconds; a live session with no write for longer "
+            f"is marked ended (default: {_DEFAULT_SESSION_IDLE_TIMEOUT:g})"
+        ),
+    )
+
+    _ = parser.add_argument(
+        "--retention",
+        type=_positive_float,
+        default=_DEFAULT_SESSION_RETENTION,
+        help=(
+            "Retention in seconds; sessions inactive for longer are removed "
+            f"(default: {_DEFAULT_SESSION_RETENTION:g})"
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -668,6 +811,9 @@ def main_entry() -> None:
         host=cast(str, args.host),
         port=cast(int, args.port),
         log_level=cast(str, args.log_level),
+        reap_interval=cast(float, args.reap_interval),
+        idle_timeout=cast(float, args.idle_timeout),
+        retention=cast(float, args.retention),
     )
 
     server.start_server()

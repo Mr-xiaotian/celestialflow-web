@@ -137,6 +137,31 @@ def insert_record(conn: sqlite3.Connection, record: dict[str, Any]) -> bool:
     return True
 
 
+def append_records_on(
+    conn: sqlite3.Connection, records: Iterable[dict[str, Any]]
+) -> int:
+    """
+    在给定连接上追加记录，不负责连接的生命周期。
+
+    单条记录写入失败（约束/类型等）不中断整批，已成功插入的记录在末尾统一提交。
+
+    :param conn: 已建立的 sqlite 连接
+    :param records: 待追加的记录迭代器
+    :return: 实际追加写入的记录数量
+    :rtype: int
+    """
+    inserted = 0
+    for item in records:
+        try:
+            if insert_record(conn, item):
+                inserted += 1
+        except sqlite3.Error:
+            # 单条记录写入失败（约束/类型等）不应中断整批。
+            continue
+    conn.commit()
+    return inserted
+
+
 def append_records(db_path: str | Path, records: Iterable[dict[str, Any]]) -> int:
     """
     自行创建并关闭连接，将给定记录列表追加写入数据库。
@@ -148,17 +173,7 @@ def append_records(db_path: str | Path, records: Iterable[dict[str, Any]]) -> in
     """
     conn = connect_db(db_path)
     try:
-        inserted = 0
-        for item in records:
-            try:
-                if insert_record(conn, item):
-                    inserted += 1
-            except sqlite3.Error:
-                # 单条记录写入失败（约束/类型等）不应中断整批，
-                # 已成功插入的记录仍会在下方统一提交。
-                continue
-        conn.commit()
-        return inserted
+        return append_records_on(conn, records)
     finally:
         conn.close()
 
