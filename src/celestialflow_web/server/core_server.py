@@ -404,19 +404,26 @@ class TaskWebServer:
         self, session_id: str, timestamp: float, status: dict[str, dict[str, Any]]
     ) -> None:
         """
-        原子更新指定会话的状态缓存、时间戳及其版本号。
+        原子更新指定会话的状态快照、时间戳及其版本号。
 
-        会话必须已存在（由图元信息注册）；本次写入会刷新活跃时间。
+        内容与上次相同时不替换、不推进版本号：上报方现在每拍无条件推送，
+        判重收敛到服务端，未变化的快照不会让前端拿到新 ``rev``
+        （即 ``pull_status`` 可继续返回 ``data=null``）。
+
+        会话必须已存在（由图元信息注册）；无论内容是否变化，本次写入都会
+        刷新活跃时间。
 
         :param session_id: 任务图实例的唯一标识
         :param timestamp: 当前状态快照对应的统一时间戳
-        :param status: 各节点状态字典
+        :param status: 各节点状态快照
         :return: None
         :raises SessionNotFoundError: 会话不存在时触发
         """
         session = self.require_session(session_id)
         session.touch()
         with session.status_lock:
+            if session.status_seen and session.status_store == status:
+                return
             session.status_timestamp = timestamp
             session.status_store = copy.deepcopy(status)
             session.status_seen = True

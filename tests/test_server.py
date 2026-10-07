@@ -76,6 +76,45 @@ def test_reporter_write_refreshes_last_seen(web_server):
     assert session.last_seen > 0.0
 
 
+def test_status_push_dedups_unchanged_snapshot(client):
+    """相同快照重复推送不推进版本号，前端可继续拿到 data=null。"""
+    session_id = "dedup@1"
+    _push_graph_meta(client, session_id)
+
+    payload = {
+        "session_id": session_id,
+        "timestamp": 1.0,
+        "snapshot": {"s1": {"status": 0}},
+    }
+    assert client.post("/api/push_snapshot", json=payload).status_code == 200
+    first = client.get(
+        f"/api/pull_status?session_id={session_id}&known_rev=-1"
+    ).json()
+    assert first["data"] == {"s1": {"status": 0}}
+    rev = first["rev"]
+
+    # 相同快照再推：版本号不变，已知版本拉取得到 data=null。
+    assert client.post(
+        "/api/push_snapshot", json={**payload, "timestamp": 2.0}
+    ).status_code == 200
+    cached = client.get(
+        f"/api/pull_status?session_id={session_id}&known_rev={rev}"
+    ).json()
+    assert cached["rev"] == rev
+    assert cached["data"] is None
+
+    # 快照变化：版本号推进，前端拿到新数据。
+    assert client.post(
+        "/api/push_snapshot",
+        json={**payload, "snapshot": {"s1": {"status": 1}}},
+    ).status_code == 200
+    fresh = client.get(
+        f"/api/pull_status?session_id={session_id}&known_rev={rev}"
+    ).json()
+    assert fresh["rev"] != rev
+    assert fresh["data"] == {"s1": {"status": 1}}
+
+
 def test_store_snapshot_methods_return_isolated_copies(web_server):
     """测试 server 快照接口：返回值不应与内部 store 共享可变引用"""
     session_id = "iso@1000"
