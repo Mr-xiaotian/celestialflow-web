@@ -13,7 +13,7 @@ from ..runtime.util_models import (
     ErrorModel,
     GraphMetaModel,
     SessionActionModel,
-    StatusModel,
+    SnapshotModel,
     TaskInjectionModel,
     TerminationInjectionModel,
     WebConfigModel,
@@ -150,16 +150,18 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
             return _session_error(data.session_id)
         return {"ok": True}
 
-    @router.post("/api/push_status", response_model=None)
-    def push_status(data: StatusModel) -> dict[str, bool] | JSONResponse:
+    @router.post("/api/push_snapshot", response_model=None)
+    def push_snapshot(data: SnapshotModel) -> dict[str, bool] | JSONResponse:
         """
-        更新目标会话的各节点运行状态并推进版本号。
+        更新目标会话的状态快照并推进版本号。
 
-        :param data: 节点状态数据
+        :param data: 状态快照数据
         :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
         """
         try:
-            server.update_status_store(data.session_id, float(data.timestamp), data.status)
+            server.update_status_store(
+                data.session_id, float(data.timestamp), data.snapshot
+            )
         except SessionNotFoundError:
             return _session_error(data.session_id)
         return {"ok": True}

@@ -21,12 +21,12 @@ class GraphMetaModel(BaseModel):
     node_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
-class StatusModel(BaseModel):
-    """节点状态数据模型"""
+class SnapshotModel(BaseModel):
+    """状态快照数据模型"""
 
     session_id: str = ""
     timestamp: float
-    status: dict[str, dict[str, Any]]
+    snapshot: dict[str, dict[str, Any]]
 
 
 class ErrorModel(BaseModel):

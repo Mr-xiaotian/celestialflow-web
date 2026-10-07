@@ -311,15 +311,15 @@ def test_server_state_seen_flags_track_writes_and_reset(client, web_server):
     assert summary["has_status"] is False
     assert summary["has_graph_meta"] is False
 
-    push_status = client.post(
-        "/api/push_status",
+    push_resp = client.post(
+        "/api/push_snapshot",
         json={
             "session_id": session_id,
             "timestamp": 1.0,
-            "status": {"s1": {"status": 0}},
+            "snapshot": {"s1": {"status": 0}},
         },
     )
-    assert push_status.status_code == 200
+    assert push_resp.status_code == 200
     assert _push_graph_meta(client, session_id).status_code == 200
 
     summary = _session_summary(client, session_id)
@@ -385,11 +385,11 @@ def test_status_push_pull(client):
         }
     }
     push_resp = client.post(
-        "/api/push_status",
+        "/api/push_snapshot",
         json={
             "session_id": session_id,
             "timestamp": test_timestamp,
-            "status": test_status,
+            "snapshot": test_status,
         },
     )
     assert push_resp.status_code == 200
@@ -889,8 +889,8 @@ def test_remove_session_drops_data_and_unknown_afterwards(client):
     assert client.get(f"/api/pull_status?session_id={session_id}").status_code == 404
     assert (
         client.post(
-            "/api/push_status",
-            json={"session_id": session_id, "timestamp": 1.0, "status": {"s1": {"status": 0}}},
+            "/api/push_snapshot",
+            json={"session_id": session_id, "timestamp": 1.0, "snapshot": {"s1": {"status": 0}}},
         ).status_code
         == 409
     )
