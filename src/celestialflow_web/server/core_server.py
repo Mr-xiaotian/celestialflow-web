@@ -24,7 +24,6 @@ from fastapi.templating import (
 )
 
 from ..routes import create_router
-from ..runtime.util_cal import cal_interval
 from ..runtime.util_config import load_config
 from ..runtime.util_errors import SessionNotFoundError
 from ..runtime.util_models import WebConfigModel
@@ -49,11 +48,15 @@ templates_path = os.path.join(PACKAGE_DIR, "templates")
 def _empty_graph_meta() -> dict[str, Any]:
     """构造一份空的图元信息缓存，供新建会话初始化。"""
     return {
+        "graph": "",
+        "graph_mode": "",
+        "start_time": 0.0,
+        "class_name": "",
+        "is_dag": False,
         "nodes": [],
         "edges": {},
         "source_nodes": [],
         "node_meta": {},
-        "analysis": None,
     }
 
 
@@ -66,7 +69,7 @@ class GraphSession:
     手动管理文件描述符，避免 Windows 上自动删除与重打开冲突。
 
     :param session_id: 任务图实例的唯一标识（不透明串）
-    :param name: 任务图名称；由 ``push_graph_meta`` 携带的 ``analysis.name`` 补齐，
+    :param name: 任务图名称；由 ``push_graph_meta`` 携带的 ``graph`` 补齐，
         未到达前等于 ``session_id``
     """
 
@@ -216,9 +219,6 @@ class TaskWebServer:
             load_config(CONFIG_PATH)
         ).model_dump(by_alias=True)
         self.config: dict[str, Any] = cast(dict[str, Any], config_raw)
-        self.report_interval: float = cal_interval(
-            int(self.config["global"]["refreshInterval"])
-        )
         self.config_lock: threading.Lock = threading.Lock()
         self.config_path: str = CONFIG_PATH
 
@@ -394,11 +394,8 @@ class TaskWebServer:
         with session.graph_meta_lock:
             session.graph_meta_store = copy.deepcopy(graph_meta)
             session.graph_meta_seen = True
-            # 图元信息里的 analysis.name 是本会话的权威显示名，到达即补齐。
-            analysis = cast(
-                dict[str, Any], session.graph_meta_store.get("analysis") or {}
-            )
-            name = analysis.get("name")
+            # 图元信息里的 graph 是本会话的权威显示名，到达即补齐。
+            name = session.graph_meta_store.get("graph")
             if isinstance(name, str) and name:
                 session.name = name
             session.store_revs["graph_meta"] = self._next_rev("graph_meta")
@@ -528,31 +525,6 @@ class TaskWebServer:
         session = self.require_session(session_id)
         with session.errors_lock:
             return session.store_revs["errors"], load_records(session.records_db_path)
-
-    def get_server_state(self, session_id: str) -> dict[str, Any]:
-        """
-        创建或刷新 graph 会话，并返回 reporter 同步决策所需的服务端状态。
-
-        与旧实现不同，这里不再迁移"当前图"所有权：每个 session_id 拥有独立会话，
-        重复调用不会清空任何既有缓存。
-
-        :param session_id: reporter 当前任务图实例的唯一标识
-        :return: 服务端同步状态摘要字典
-        :rtype: dict[str, Any]
-        """
-        session = self.ensure_session(session_id)
-        with session.graph_meta_lock:
-            has_graph_meta = session.graph_meta_seen
-        with session.status_lock:
-            has_status = session.status_seen
-        return {
-            "session_id": session.session_id,
-            "interval": self.report_interval,
-            "has_graph_meta": has_graph_meta,
-            "has_status": has_status,
-            "alive": session.alive,
-            "max_event_id_in_fail": self.get_max_event_id_in_fail(session_id),
-        }
 
     def get_injection(self, session_id: str) -> dict[str, Any]:
         """

@@ -7,11 +7,10 @@ from typing import TYPE_CHECKING, Any, cast
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from ..runtime.util_cal import cal_interval
 from ..runtime.util_config import save_config
 from ..runtime.util_errors import ConfigurationError, SessionNotFoundError
 from ..runtime.util_models import (
-    ErrorsModel,
+    ErrorModel,
     GraphMetaModel,
     SessionActionModel,
     StatusModel,
@@ -64,9 +63,6 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
         """
         config_raw: Any = data.model_dump(by_alias=True)
         new_config: dict[str, Any] = cast(dict[str, Any], config_raw)
-        new_interval: float = cal_interval(
-            int(new_config["global"]["refreshInterval"])
-        )
         try:
             save_config(new_config, config_path)
         except ConfigurationError as e:
@@ -77,7 +73,6 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
             )
         with server.config_lock:
             server.config = new_config
-            server.report_interval = new_interval
         return {"ok": True}
 
     @router.post("/api/push_injection_tasks", response_model=None)
@@ -169,16 +164,20 @@ def register(router: APIRouter, server: TaskWebServer, config_path: str) -> None
             return _session_error(data.session_id)
         return {"ok": True}
 
-    @router.post("/api/push_errors", response_model=None)
-    def push_errors(data: ErrorsModel) -> dict[str, bool] | JSONResponse:
+    @router.post("/api/push_error", response_model=None)
+    def push_error(data: ErrorModel) -> dict[str, bool] | JSONResponse:
         """
-        将错误日志列表写入目标会话的错误数据库。
+        将单条错误写入目标会话的错误数据库。
 
-        :param data: 错误内容数据
+        上报方每发生一次任务失败就推送一条，服务端按 ``event_id`` 幂等追加。
+
+        :param data: 单条错误数据
         :return: {"ok": True} 或 JSONResponse({"ok": False, "error": ...}, 409)
         """
         try:
-            server.update_errors_store(data.session_id, data.errors)
+            server.update_errors_store(
+                data.session_id, [data.model_dump(exclude={"session_id"})]
+            )
         except SessionNotFoundError:
             return _session_error(data.session_id)
         return {"ok": True}

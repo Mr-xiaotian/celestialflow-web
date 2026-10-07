@@ -7,14 +7,18 @@ from pydantic import BaseModel, Field
 
 
 class GraphMetaModel(BaseModel):
-    """图元信息数据模型：图结构、节点构建期元信息与图分析结果"""
+    """图元信息数据模型：图结构、节点构建期元信息与分析结果"""
 
     session_id: str = ""
+    graph: str = ""
+    graph_mode: str = ""
+    start_time: float = 0.0
+    class_name: str = ""
+    is_dag: bool = False
     nodes: list[str] = Field(default_factory=list)
     edges: dict[str, list[str]] = Field(default_factory=dict)
     source_nodes: list[str] = Field(default_factory=list)
     node_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    analysis: dict[str, Any] | None = None
 
 
 class StatusModel(BaseModel):
@@ -25,11 +29,16 @@ class StatusModel(BaseModel):
     status: dict[str, dict[str, Any]]
 
 
-class ErrorsModel(BaseModel):
-    """错误内容数据模型"""
+class ErrorModel(BaseModel):
+    """单条错误数据模型"""
 
     session_id: str = ""
-    errors: list[dict[str, Any]]
+    event_id: int
+    node: str = ""
+    task_json: Any = None
+    error_type: str = ""
+    error_message: str = ""
+    ts: float = 0.0
 
 
 class TaskInjectionModel(BaseModel):

@@ -37,17 +37,6 @@ def register(router: APIRouter, server: TaskWebServer) -> None:
     """
 
     # ==== Reporter / Backend Pulls ====
-    @router.get("/api/pull_server_state", response_model=None)
-    def pull_server_state(session_id: str = "") -> dict[str, Any] | JSONResponse:
-        """创建或刷新 graph 会话，并返回 reporter 同步决策所需的服务端状态。
-
-        :param session_id: reporter 当前任务图实例的唯一标识
-        :return: {"session_id": str, "interval": float, "has_graph_meta": bool, "has_status": bool, "alive": bool, "max_event_id_in_fail": int | None}
-        """
-        if not session_id:
-            return _session_error(session_id)
-        return server.get_server_state(session_id)
-
     @router.get("/api/pull_injection", response_model=None)
     def pull_injection(session_id: str = "") -> dict[str, Any] | JSONResponse:
         """取出并清空指定会话待执行的前端注入任务与终止符。

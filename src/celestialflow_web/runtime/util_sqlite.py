@@ -78,7 +78,7 @@ def normalize_record(record: dict[str, Any]) -> dict[str, Any] | None:
         return {
             "event_id": int(event_id),
             "node": str(record["node"]),
-            "status": str(record["status"]),
+            "status": str(record.get("status", "failed") or "failed"),
             "error_type": str(record.get("error_type", "") or ""),
             "error_message": str(record.get("error_message", "") or ""),
             "ts": float(record.get("ts", 0.0) or 0.0),
