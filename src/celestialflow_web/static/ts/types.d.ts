@@ -22,11 +22,11 @@ type ApiVersionedResponse<T> = {
 /**
  * 服务端持有的单个 graph 运行实例会话
  *
- * 多个任务图（通常位于不同进程或不同机器）可同时上报，前端按 graph_id 切换查看。
+ * 多个任务图（通常位于不同进程或不同机器）可同时上报，前端按 session_id 切换查看。
  */
 export type GraphSession = {
-  graph_id: string; // 任务图实例唯一标识，形如 name@毫秒时间戳
-  name: string; // 任务图名称（graph_id 中 @ 之前的部分）
+  session_id: string; // 任务图实例唯一标识，形如 name@毫秒时间戳
+  name: string; // 任务图名称（session_id 中 @ 之前的部分）
   alive: boolean; // reporter 是否仍在运行
   shutdown_reason: string | null; // 会话结束原因，alive 为 true 时为 null
   created_at: number; // 会话创建时间（Unix 秒）

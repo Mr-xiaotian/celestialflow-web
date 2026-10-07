@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class GraphMetaModel(BaseModel):
     """图元信息数据模型：图结构、节点构建期元信息与图分析结果"""
 
-    graph_id: str = ""
+    session_id: str = ""
     nodes: list[str] = Field(default_factory=list)
     edges: dict[str, list[str]] = Field(default_factory=dict)
     source_nodes: list[str] = Field(default_factory=list)
@@ -20,7 +20,7 @@ class GraphMetaModel(BaseModel):
 class StatusModel(BaseModel):
     """节点状态数据模型"""
 
-    graph_id: str = ""
+    session_id: str = ""
     timestamp: float
     status: dict[str, dict[str, Any]]
 
@@ -28,28 +28,28 @@ class StatusModel(BaseModel):
 class ErrorsModel(BaseModel):
     """错误内容数据模型"""
 
-    graph_id: str = ""
+    session_id: str = ""
     errors: list[dict[str, Any]]
 
 
 class TaskInjectionModel(BaseModel):
     """任务注入请求模型：按 graph 会话投递的 {node_name: [tasklist]} 映射"""
 
-    graph_id: str = ""  # 目标任务图会话标识
+    session_id: str = ""  # 目标任务图会话标识
     tasks: dict[str, list[Any]] = Field(default_factory=dict)  # 节点名到任务列表的映射
 
 
 class TerminationInjectionModel(BaseModel):
     """终止符注入请求模型：按 graph 会话投递的节点名列表。"""
 
-    graph_id: str = ""  # 目标任务图会话标识
+    session_id: str = ""  # 目标任务图会话标识
     nodes: list[str] = Field(default_factory=list)  # 待注入终止符的节点名列表
 
 
 class SessionActionModel(BaseModel):
     """会话级操作（shutdown / remove）请求模型"""
 
-    graph_id: str = ""  # 目标会话的任务图实例标识
+    session_id: str = ""  # 目标会话的任务图实例标识
 
 
 class DashboardConfigModel(BaseModel):

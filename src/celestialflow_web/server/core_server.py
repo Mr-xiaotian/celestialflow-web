@@ -65,19 +65,19 @@ class GraphSession:
     不同会话之间互不干扰；错误数据库在创建时使用 ``tempfile.mkstemp``
     手动管理文件描述符，避免 Windows 上自动删除与重打开冲突。
 
-    :param graph_id: 任务图实例的唯一标识（不透明串）
+    :param session_id: 任务图实例的唯一标识（不透明串）
     :param name: 任务图名称；由 ``push_graph_meta`` 携带的 ``analysis.name`` 补齐，
-        未到达前等于 ``graph_id``
+        未到达前等于 ``session_id``
     """
 
-    def __init__(self, graph_id: str, name: str) -> None:
+    def __init__(self, session_id: str, name: str) -> None:
         """
         初始化会话上下文。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :param name: 任务图名称
         """
-        self.graph_id: str = graph_id
+        self.session_id: str = session_id
         self.name: str = name
 
         self.status_store: dict[str, dict[str, Any]] = {}
@@ -137,7 +137,7 @@ class GraphSession:
         with self.graph_meta_lock:
             has_graph_meta = self.graph_meta_seen
         return {
-            "graph_id": self.graph_id,
+            "session_id": self.session_id,
             "name": self.name,
             "alive": self.alive,
             "shutdown_reason": self.shutdown_reason,
@@ -172,7 +172,7 @@ class TaskWebServer:
     """
     FastAPI Web 服务，提供任务可视化、状态推送和任务注入接口。
 
-    服务端按 ``graph_id`` 维护多个 :class:`GraphSession`，允许多个任务图
+    服务端按 ``session_id`` 维护多个 :class:`GraphSession`，允许多个任务图
     运行实例（通常位于不同进程或不同机器）同时上报，前端可在会话之间切换。
     """
 
@@ -196,7 +196,7 @@ class TaskWebServer:
 
         self.templates: Jinja2Templates = Jinja2Templates(directory=templates_path)
 
-        # 所有 graph 会话，键为 graph_id
+        # 所有 graph 会话，键为 session_id
         self.sessions: dict[str, GraphSession] = {}
 
         # 会话列表自身的增删由该锁保护；会话内部状态由各自 store 锁保护
@@ -258,61 +258,62 @@ class TaskWebServer:
                 session.close()
 
     # ==== Session Lifecycle ====
-    def create_session(self, graph_id: str) -> GraphSession:
+    def create_session(self, session_id: str) -> GraphSession:
         """
         创建一个新的 graph 会话并登记到会话表。
 
-        若已存在同 `graph_id` 的会话则直接返回既有实例，不会重建缓存。
-        显示名先以 `graph_id` 占位，待 ``push_graph_meta`` 到达后再补齐。
+        若已存在同 `session_id` 的会话则直接返回既有实例，不会重建缓存。
+        显示名先以 `session_id` 占位，待 ``push_graph_meta`` 到达后再补齐。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: 新建或既有的会话上下文
         :rtype: GraphSession
         """
         with self.sessions_lock:
-            existing = self.sessions.get(graph_id)
+            existing = self.sessions.get(session_id)
             if existing is not None:
                 return existing
-            session = GraphSession(graph_id=graph_id, name=graph_id)
-            self.sessions[graph_id] = session
+            session = GraphSession(session_id=session_id, name=session_id)
+            self.sessions[session_id] = session
             return session
 
-    def get_session(self, graph_id: str) -> GraphSession | None:
+    def get_session(self, session_id: str) -> GraphSession | None:
         """
         读取指定会话，不存在时返回 ``None``。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: 对应会话或 ``None``
         :rtype: GraphSession | None
         """
         with self.sessions_lock:
-            return self.sessions.get(graph_id)
+            return self.sessions.get(session_id)
 
-    def require_session(self, graph_id: str) -> GraphSession:
+    def require_session(self, session_id: str) -> GraphSession:
         """
         读取指定会话，不存在时抛出 :class:`SessionNotFoundError`。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: 对应会话
         :rtype: GraphSession
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.get_session(graph_id)
+        session = self.get_session(session_id)
         if session is None:
-            raise SessionNotFoundError(graph_id)
+            raise SessionNotFoundError(session_id)
         return session
 
-    def ensure_session(self, graph_id: str) -> GraphSession:
+    def ensure_session(self, session_id: str) -> GraphSession:
         """
         确保指定会话存在并刷新其活跃时间。
 
-        reporter 每次状态对齐都会调用该方法，因此不存在的会话会被自动创建。
+        图元信息写入（会话注册入口）时调用：会话不存在时自动创建，
+        并以本次写入刷新 :attr:`GraphSession.last_seen`。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: 对应会话
         :rtype: GraphSession
         """
-        session = self.create_session(graph_id)
+        session = self.create_session(session_id)
         session.touch()
         return session
 
@@ -329,17 +330,17 @@ class TaskWebServer:
         summaries.sort(key=lambda item: item["created_at"], reverse=True)
         return summaries
 
-    def shutdown_session(self, graph_id: str) -> bool:
+    def shutdown_session(self, session_id: str) -> bool:
         """
         标记会话为已结束（reporter 主动通知）。
 
         会话数据与错误数据库会保留，前端仍可切回查看；重复调用是幂等的。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: 是否命中了已存在的会话
         :rtype: bool
         """
-        session = self.get_session(graph_id)
+        session = self.get_session(session_id)
         if session is None:
             return False
         session.alive = False
@@ -347,19 +348,19 @@ class TaskWebServer:
         session.touch()
         return True
 
-    def remove_session(self, graph_id: str) -> bool:
+    def remove_session(self, session_id: str) -> bool:
         """
         彻底移除会话：释放缓存并删除其临时错误数据库文件。
 
         删除在 `sessions_lock` 内完成，确保没有其它线程能在摘除后、
         删除前拿到该会话引用（否则在途请求会重建已删除的 sqlite 文件）。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: 是否移除了一个已存在的会话
         :rtype: bool
         """
         with self.sessions_lock:
-            session = self.sessions.pop(graph_id, None)
+            session = self.sessions.pop(session_id, None)
             if session is None:
                 return False
             session.close()
@@ -379,16 +380,17 @@ class TaskWebServer:
             return self.store_revs[key]
 
     # ==== Store Writes ====
-    def update_graph_meta_store(self, graph_id: str, graph_meta: dict[str, Any]) -> None:
+    def update_graph_meta_store(self, session_id: str, graph_meta: dict[str, Any]) -> None:
         """
         原子更新指定会话的图元信息缓存（结构 + 节点元信息 + 分析）并推进版本号。
 
-        :param graph_id: 任务图实例的唯一标识
+        图元信息写入是会话注册入口：会话不存在时自动创建，并以本次写入刷新活跃时间。
+
+        :param session_id: 任务图实例的唯一标识
         :param graph_meta: 最新图元信息数据
         :return: None
-        :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.ensure_session(session_id)
         with session.graph_meta_lock:
             session.graph_meta_store = copy.deepcopy(graph_meta)
             session.graph_meta_seen = True
@@ -402,77 +404,83 @@ class TaskWebServer:
             session.store_revs["graph_meta"] = self._next_rev("graph_meta")
 
     def update_status_store(
-        self, graph_id: str, timestamp: float, status: dict[str, dict[str, Any]]
+        self, session_id: str, timestamp: float, status: dict[str, dict[str, Any]]
     ) -> None:
         """
         原子更新指定会话的状态缓存、时间戳及其版本号。
 
-        :param graph_id: 任务图实例的唯一标识
+        会话必须已存在（由图元信息注册）；本次写入会刷新活跃时间。
+
+        :param session_id: 任务图实例的唯一标识
         :param timestamp: 当前状态快照对应的统一时间戳
         :param status: 各节点状态字典
         :return: None
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
+        session.touch()
         with session.status_lock:
             session.status_timestamp = timestamp
             session.status_store = copy.deepcopy(status)
             session.status_seen = True
             session.store_revs["status"] = self._next_rev("status")
 
-    def update_errors_store(self, graph_id: str, errors: list[dict[str, Any]]) -> None:
+    def update_errors_store(self, session_id: str, errors: list[dict[str, Any]]) -> None:
         """
         原子更新指定会话的错误缓存及其版本号。
 
-        :param graph_id: 任务图实例的唯一标识
+        会话必须已存在（由图元信息注册）；本次写入会刷新活跃时间。
+
+        :param session_id: 任务图实例的唯一标识
         :param errors: 待写入的错误记录列表
         :return: None
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
+        session.touch()
         with session.errors_lock:
             _ = append_records(session.records_db_path, errors)
             session.store_revs["errors"] = self._next_rev("errors")
 
-    def add_injection_tasks(self, graph_id: str, tasks: dict[str, list[Any]]) -> None:
+    def add_injection_tasks(self, session_id: str, tasks: dict[str, list[Any]]) -> None:
         """
         将前端提交的注入任务按节点覆盖写入指定会话的待执行队列。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :param tasks: 节点名到任务列表的映射
         :return: None
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.task_injection_lock:
             for node_name, task_list in tasks.items():
                 session.injection_tasks[node_name] = task_list
 
-    def add_injection_terminations(self, graph_id: str, nodes: list[str]) -> None:
+    def add_injection_terminations(self, session_id: str, nodes: list[str]) -> None:
         """
         将前端提交的终止符注入目标追加到指定会话的待执行集合。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :param nodes: 待注入终止符的节点名列表
         :return: None
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.task_injection_lock:
             for node_name in nodes:
                 session.injection_terminations.add(str(node_name))
 
     # ==== Store Reads ====
-    def get_graph_meta_snapshot(self, graph_id: str) -> tuple[int, dict[str, Any]]:
+    def get_graph_meta_snapshot(self, session_id: str) -> tuple[int, dict[str, Any]]:
         """
         原子读取指定会话的图元信息缓存快照。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: ``(rev, graph_meta_store)``
         :rtype: tuple[int, dict[str, Any]]
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.graph_meta_lock:
             return (
                 session.store_revs["graph_meta"],
@@ -490,17 +498,17 @@ class TaskWebServer:
             return self.config
 
     def get_status_snapshot(
-        self, graph_id: str
+        self, session_id: str
     ) -> tuple[int, float, dict[str, dict[str, Any]]]:
         """
         原子读取指定会话的状态缓存快照。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: ``(rev, timestamp, status_store)``
         :rtype: tuple[int, float, dict[str, dict[str, Any]]]
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.status_lock:
             return (
                 session.store_revs["status"],
@@ -508,54 +516,54 @@ class TaskWebServer:
                 copy.deepcopy(session.status_store),
             )
 
-    def get_errors_snapshot(self, graph_id: str) -> tuple[int, list[dict[str, Any]]]:
+    def get_errors_snapshot(self, session_id: str) -> tuple[int, list[dict[str, Any]]]:
         """
         原子读取指定会话的错误缓存快照。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: ``(rev, errors)``
         :rtype: tuple[int, list[dict[str, Any]]]
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.errors_lock:
             return session.store_revs["errors"], load_records(session.records_db_path)
 
-    def get_server_state(self, graph_id: str) -> dict[str, Any]:
+    def get_server_state(self, session_id: str) -> dict[str, Any]:
         """
         创建或刷新 graph 会话，并返回 reporter 同步决策所需的服务端状态。
 
-        与旧实现不同，这里不再迁移"当前图"所有权：每个 graph_id 拥有独立会话，
+        与旧实现不同，这里不再迁移"当前图"所有权：每个 session_id 拥有独立会话，
         重复调用不会清空任何既有缓存。
 
-        :param graph_id: reporter 当前任务图实例的唯一标识
+        :param session_id: reporter 当前任务图实例的唯一标识
         :return: 服务端同步状态摘要字典
         :rtype: dict[str, Any]
         """
-        session = self.ensure_session(graph_id)
+        session = self.ensure_session(session_id)
         with session.graph_meta_lock:
             has_graph_meta = session.graph_meta_seen
         with session.status_lock:
             has_status = session.status_seen
         return {
-            "graph_id": session.graph_id,
+            "session_id": session.session_id,
             "interval": self.report_interval,
             "has_graph_meta": has_graph_meta,
             "has_status": has_status,
             "alive": session.alive,
-            "max_event_id_in_fail": self.get_max_event_id_in_fail(graph_id),
+            "max_event_id_in_fail": self.get_max_event_id_in_fail(session_id),
         }
 
-    def get_injection(self, graph_id: str) -> dict[str, Any]:
+    def get_injection(self, session_id: str) -> dict[str, Any]:
         """
         原子取出并清空指定会话的待注入任务与终止符。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: ``{"tasks": dict[str, list[Any]], "terminations": list[str]}``
         :rtype: dict[str, Any]
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.task_injection_lock:
             tasks = copy.deepcopy(session.injection_tasks)
             terminations = sorted(session.injection_terminations)
@@ -565,7 +573,7 @@ class TaskWebServer:
 
     def get_errors_page(
         self,
-        graph_id: str,
+        session_id: str,
         page: int,
         page_size: int,
         node: str,
@@ -575,7 +583,7 @@ class TaskWebServer:
         """
         原子读取指定会话的错误缓存版本号与分页结果。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :param page: 请求页码
         :param page_size: 每页大小
         :param node: 节点名称过滤条件
@@ -585,7 +593,7 @@ class TaskWebServer:
         :rtype: tuple[int, int, int, list[dict[str, Any]]]
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.errors_lock:
             rev = session.store_revs["errors"]
             total, total_pages, page_items = query_records(
@@ -594,33 +602,33 @@ class TaskWebServer:
             return rev, total, total_pages, page_items
 
     def get_error_type_counts(
-        self, graph_id: str, node: str = ""
+        self, session_id: str, node: str = ""
     ) -> tuple[int, list[dict[str, Any]]]:
         """
         原子读取指定会话的错误缓存版本号与按错误类型聚合后的统计结果。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :param node: 节点名称过滤条件；为空时统计全部节点
         :return: ``(rev, items)``
         :rtype: tuple[int, list[dict[str, Any]]]
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.errors_lock:
             rev = session.store_revs["errors"]
             items = query_error_type_counts(session.records_db_path, node=node)
             return rev, items
 
-    def get_max_event_id_in_fail(self, graph_id: str) -> int | None:
+    def get_max_event_id_in_fail(self, session_id: str) -> int | None:
         """
         原子读取指定会话错误缓存中失败记录的最大 ``event_id``。
 
-        :param graph_id: 任务图实例的唯一标识
+        :param session_id: 任务图实例的唯一标识
         :return: 当前缓存中失败记录的最大 ``event_id``；若不存在失败记录则返回 ``None``
         :rtype: int | None
         :raises SessionNotFoundError: 会话不存在时触发
         """
-        session = self.require_session(graph_id)
+        session = self.require_session(session_id)
         with session.errors_lock:
             return get_max_event_id_in_fail(session.records_db_path)
 

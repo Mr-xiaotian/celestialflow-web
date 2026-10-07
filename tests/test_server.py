@@ -5,15 +5,15 @@ from pathlib import Path
 from celestialflow_web.server.core_server import static_path
 
 
-def _push_graph_meta(client, graph_id: str, name: str | None = None):
+def _push_graph_meta(client, session_id: str, name: str | None = None):
     """推送一份最小图元信息，用于建立 graph 会话；返回响应供调用方断言状态码。"""
-    analysis: dict = {"graphId": graph_id, "isDAG": True}
+    analysis: dict = {"graphId": session_id, "isDAG": True}
     if name is not None:
         analysis["name"] = name
     return client.post(
         "/api/push_graph_meta",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "nodes": ["s1"],
             "edges": {"s1": []},
             "source_nodes": ["s1"],
@@ -23,15 +23,47 @@ def _push_graph_meta(client, graph_id: str, name: str | None = None):
     )
 
 
-def _ensure_session(client, graph_id: str) -> dict:
+def _ensure_session(client, session_id: str) -> dict:
     """通过 pull_server_state 建立会话并返回状态摘要。"""
-    return client.get(f"/api/pull_server_state?graph_id={graph_id}").json()
+    return client.get(f"/api/pull_server_state?session_id={session_id}").json()
+
+
+def test_reporter_graph_meta_auto_creates_session(client):
+    """图元信息写入是会话注册入口：会话不存在时自动创建，而不是 409。"""
+    session_id = "autocreate@1"
+    response = _push_graph_meta(client, session_id)
+
+    assert response.status_code == 200
+    ids = {item["session_id"] for item in client.get("/api/pull_sessions").json()}
+    assert session_id in ids
+
+
+def test_reporter_write_refreshes_last_seen(web_server):
+    """会话建立后，每次上报写入都应刷新 last_seen（存活证明）。"""
+    session_id = "heartbeat@1"
+    web_server.update_graph_meta_store(
+        session_id,
+        {
+            "nodes": ["s1"],
+            "edges": {"s1": []},
+            "source_nodes": ["s1"],
+            "node_meta": {},
+            "analysis": None,
+        },
+    )
+    session = web_server.get_session(session_id)
+    assert session is not None
+
+    session.last_seen = 0.0
+    web_server.update_status_store(session_id, 2.0, {"s1": {"status": 1}})
+
+    assert session.last_seen > 0.0
 
 
 def test_store_snapshot_methods_return_isolated_copies(web_server):
     """测试 server 快照接口：返回值不应与内部 store 共享可变引用"""
-    graph_id = "iso@1000"
-    web_server.create_session(graph_id)
+    session_id = "iso@1000"
+    web_server.create_session(session_id)
 
     raw_status = {"s1": {"tasks_succeeded": 1, "total_remaining_time": 2.0}}
     raw_graph_meta = {
@@ -50,13 +82,13 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
         }
     ]
 
-    web_server.update_status_store(graph_id, 123.0, raw_status)
-    web_server.update_graph_meta_store(graph_id, raw_graph_meta)
-    web_server.update_errors_store(graph_id, raw_errors)
+    web_server.update_status_store(session_id, 123.0, raw_status)
+    web_server.update_graph_meta_store(session_id, raw_graph_meta)
+    web_server.update_errors_store(session_id, raw_errors)
 
-    _, status_timestamp, status_snapshot = web_server.get_status_snapshot(graph_id)
-    _, graph_meta_snapshot = web_server.get_graph_meta_snapshot(graph_id)
-    _, errors_snapshot = web_server.get_errors_snapshot(graph_id)
+    _, status_timestamp, status_snapshot = web_server.get_status_snapshot(session_id)
+    _, graph_meta_snapshot = web_server.get_graph_meta_snapshot(session_id)
+    _, errors_snapshot = web_server.get_errors_snapshot(session_id)
 
     raw_status["s1"]["tasks_succeeded"] = 99
     raw_graph_meta["nodes"].append("s2")
@@ -70,10 +102,10 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
     errors_snapshot[0]["node"] = "snapshot-mutated"
 
     _, status_timestamp_after, status_snapshot_after = web_server.get_status_snapshot(
-        graph_id
+        session_id
     )
-    _, graph_meta_snapshot_after = web_server.get_graph_meta_snapshot(graph_id)
-    _, errors_snapshot_after = web_server.get_errors_snapshot(graph_id)
+    _, graph_meta_snapshot_after = web_server.get_graph_meta_snapshot(session_id)
+    _, errors_snapshot_after = web_server.get_errors_snapshot(session_id)
 
     assert status_timestamp == 123.0
     assert status_timestamp_after == 123.0
@@ -86,10 +118,10 @@ def test_store_snapshot_methods_return_isolated_copies(web_server):
 
 def test_get_error_type_counts_returns_grouped_stats(web_server):
     """测试 server 层可返回全部节点的错误类型聚合统计。"""
-    graph_id = "grouped@1000"
-    web_server.create_session(graph_id)
+    session_id = "grouped@1000"
+    web_server.create_session(session_id)
     web_server.update_errors_store(
-        graph_id,
+        session_id,
         [
             {
                 "event_id": 1,
@@ -121,9 +153,9 @@ def test_get_error_type_counts_returns_grouped_stats(web_server):
         ],
     )
 
-    rev, items = web_server.get_error_type_counts(graph_id)
+    rev, items = web_server.get_error_type_counts(session_id)
 
-    assert rev == web_server.get_session(graph_id).store_revs["errors"]
+    assert rev == web_server.get_session(session_id).store_revs["errors"]
     assert items == [
         {"error_type": "ValueError", "count": 2},
         {"error_type": "TypeError", "count": 1},
@@ -132,10 +164,10 @@ def test_get_error_type_counts_returns_grouped_stats(web_server):
 
 def test_get_error_type_counts_supports_node_filter(web_server):
     """测试 server 层错误类型聚合支持按节点过滤。"""
-    graph_id = "nodefilter@1000"
-    web_server.create_session(graph_id)
+    session_id = "nodefilter@1000"
+    web_server.create_session(session_id)
     web_server.update_errors_store(
-        graph_id,
+        session_id,
         [
             {
                 "event_id": 1,
@@ -167,9 +199,9 @@ def test_get_error_type_counts_supports_node_filter(web_server):
         ],
     )
 
-    rev, items = web_server.get_error_type_counts(graph_id, "s1")
+    rev, items = web_server.get_error_type_counts(session_id, "s1")
 
-    assert rev == web_server.get_session(graph_id).store_revs["errors"]
+    assert rev == web_server.get_session(session_id).store_revs["errors"]
     assert items == [
         {"error_type": "TypeError", "count": 1},
         {"error_type": "ValueError", "count": 1},
@@ -252,11 +284,11 @@ def test_config_api(client):
 
 def test_server_state_api(client):
     """测试 reporter 拉取的服务端同步状态。"""
-    response = client.get("/api/pull_server_state?graph_id=demo@1000")
+    response = client.get("/api/pull_server_state?session_id=demo@1000")
 
     assert response.status_code == 200
     data = response.json()
-    assert data["graph_id"] == "demo@1000"
+    assert data["session_id"] == "demo@1000"
     assert data["interval"] > 0
     assert data["has_graph_meta"] is False
     assert data["has_status"] is False
@@ -264,54 +296,54 @@ def test_server_state_api(client):
     assert data["max_event_id_in_fail"] is None
 
 
-def test_pull_server_state_rejects_empty_graph_id(client):
-    """空 graph_id 不应被当作合法会话。"""
-    response = client.get("/api/pull_server_state?graph_id=")
+def test_pull_server_state_rejects_empty_session_id(client):
+    """空 session_id 不应被当作合法会话。"""
+    response = client.get("/api/pull_server_state?session_id=")
 
     assert response.status_code == 404
-    assert response.json()["error"] == "unknown graph_id"
+    assert response.json()["error"] == "unknown session_id"
 
 
 def test_server_state_seen_flags_track_writes_and_reset(client):
     """has_status / has_graph_meta 反映服务端是否收到过写入，会话重建后归零。"""
-    graph_id = "seen@1000"
+    session_id = "seen@1000"
 
-    state = _ensure_session(client, graph_id)
+    state = _ensure_session(client, session_id)
     assert state["has_status"] is False
     assert state["has_graph_meta"] is False
 
     push_status = client.post(
         "/api/push_status",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "timestamp": 1.0,
             "status": {"s1": {"status": 0}},
         },
     )
     assert push_status.status_code == 200
-    assert _push_graph_meta(client, graph_id).status_code == 200
+    assert _push_graph_meta(client, session_id).status_code == 200
 
-    state = _ensure_session(client, graph_id)
+    state = _ensure_session(client, session_id)
     assert state["has_status"] is True
     assert state["has_graph_meta"] is True
 
     # 会话被移除后由 pull_server_state 重建，两个标志应回到 False 以触发全量重推。
-    removed = client.post("/api/remove_session", json={"graph_id": graph_id})
+    removed = client.post("/api/remove_session", json={"session_id": session_id})
     assert removed.json() == {"ok": True}
-    state = _ensure_session(client, graph_id)
+    state = _ensure_session(client, session_id)
     assert state["has_status"] is False
     assert state["has_graph_meta"] is False
 
 
 def test_empty_graph_meta_still_marks_seen(client):
     """图元信息的 nodes 为空时也应标记为已收到，避免每轮重推。"""
-    graph_id = "empty@1000"
-    _ensure_session(client, graph_id)
+    session_id = "empty@1000"
+    _ensure_session(client, session_id)
 
     response = client.post(
         "/api/push_graph_meta",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "nodes": [],
             "edges": {},
             "source_nodes": [],
@@ -321,7 +353,7 @@ def test_empty_graph_meta_still_marks_seen(client):
     )
     assert response.status_code == 200
 
-    state = _ensure_session(client, graph_id)
+    state = _ensure_session(client, session_id)
     assert state["has_graph_meta"] is True
 
 
@@ -330,7 +362,7 @@ def test_push_errors_meta_route_removed(client):
     response = client.post(
         "/api/push_errors_meta",
         json={
-            "graph_id": "demo@1000",
+            "session_id": "demo@1000",
             "append": False,
         },
     )
@@ -339,8 +371,8 @@ def test_push_errors_meta_route_removed(client):
 
 def test_status_push_pull(client):
     """测试状态同步链路：验证已知版本号（known_rev）下的增量拉取逻辑"""
-    graph_id = "demo@1000"
-    state = _ensure_session(client, graph_id)
+    session_id = "demo@1000"
+    state = _ensure_session(client, session_id)
     assert state["has_graph_meta"] is False
 
     # 1. 推送状态
@@ -356,7 +388,7 @@ def test_status_push_pull(client):
     push_resp = client.post(
         "/api/push_status",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "timestamp": test_timestamp,
             "status": test_status,
         },
@@ -365,7 +397,7 @@ def test_status_push_pull(client):
     assert push_resp.json() == {"ok": True}
 
     # 2. 拉取状态 (known_rev=-1)
-    pull_resp = client.get(f"/api/pull_status?graph_id={graph_id}&known_rev=-1")
+    pull_resp = client.get(f"/api/pull_status?session_id={session_id}&known_rev=-1")
     assert pull_resp.status_code == 200
     pull_data = pull_resp.json()
     assert pull_data["rev"] > 0
@@ -376,18 +408,18 @@ def test_status_push_pull(client):
     # 3. 再次拉取相同版本 (known_rev=current_rev)
     current_rev = pull_data["rev"]
     pull_resp_cached = client.get(
-        f"/api/pull_status?graph_id={graph_id}&known_rev={current_rev}"
+        f"/api/pull_status?session_id={session_id}&known_rev={current_rev}"
     )
     assert pull_resp_cached.json()["data"] is None
 
 
 def test_graph_meta_push_pull(client):
     """测试图元信息同步链路：结构、节点元信息与分析结果应经 push/pull 完整保留"""
-    graph_id = "demo@1000"
-    _ensure_session(client, graph_id)
+    session_id = "demo@1000"
+    _ensure_session(client, session_id)
 
     test_graph_meta = {
-        "graph_id": graph_id,
+        "session_id": session_id,
         "nodes": ["s1", "s2"],
         "edges": {"s1": ["s2"], "s2": []},
         "source_nodes": ["s1"],
@@ -403,14 +435,14 @@ def test_graph_meta_push_pull(client):
                 "max_workers": 1,
             },
         },
-        "analysis": {"graphId": graph_id, "isDAG": True, "layersDict": {"0": ["s1"]}},
+        "analysis": {"graphId": session_id, "isDAG": True, "layersDict": {"0": ["s1"]}},
     }
     push_resp = client.post("/api/push_graph_meta", json=test_graph_meta)
     assert push_resp.status_code == 200
     assert push_resp.json() == {"ok": True}
 
     pull_data = client.get(
-        f"/api/pull_graph_meta?graph_id={graph_id}&known_rev=-1"
+        f"/api/pull_graph_meta?session_id={session_id}&known_rev=-1"
     ).json()
     assert pull_data["rev"] > 0
     assert pull_data["data"] == {
@@ -423,14 +455,14 @@ def test_graph_meta_push_pull(client):
 
     # 版本未变时不应重复下发
     pull_cached = client.get(
-        f"/api/pull_graph_meta?graph_id={graph_id}&known_rev={pull_data['rev']}"
+        f"/api/pull_graph_meta?session_id={session_id}&known_rev={pull_data['rev']}"
     )
     assert pull_cached.json()["data"] is None
 
 def test_task_injection(client):
     """测试任务与终止符注入流程：验证服务端原子返回并在 pull 后清空。"""
-    graph_id = "inject@1000"
-    _ensure_session(client, graph_id)
+    session_id = "inject@1000"
+    _ensure_session(client, session_id)
 
     # 1. 注入任务
     injection_data = {
@@ -438,19 +470,19 @@ def test_task_injection(client):
     }
     push_resp = client.post(
         "/api/push_injection_tasks",
-        json={"graph_id": graph_id, "tasks": injection_data},
+        json={"session_id": session_id, "tasks": injection_data},
     )
     assert push_resp.status_code == 200
     assert push_resp.json() == {"ok": True}
     termination_resp = client.post(
         "/api/push_injection_terminations",
-        json={"graph_id": graph_id, "nodes": ["StageB"]},
+        json={"session_id": session_id, "nodes": ["StageB"]},
     )
     assert termination_resp.status_code == 200
     assert termination_resp.json() == {"ok": True}
 
     # 2. 拉取注入任务
-    pull_resp = client.get(f"/api/pull_injection?graph_id={graph_id}")
+    pull_resp = client.get(f"/api/pull_injection?session_id={session_id}")
     assert pull_resp.status_code == 200
     tasks = pull_resp.json()
     assert tasks == {
@@ -459,7 +491,7 @@ def test_task_injection(client):
     }
 
     # 3. 再次拉取应为空（已清空）
-    pull_again = client.get(f"/api/pull_injection?graph_id={graph_id}")
+    pull_again = client.get(f"/api/pull_injection?session_id={session_id}")
     assert pull_again.json() == {"tasks": {}, "terminations": []}
 
 
@@ -472,15 +504,15 @@ def test_task_injection_isolated_between_sessions(client):
 
     client.post(
         "/api/push_injection_tasks",
-        json={"graph_id": graph_a, "tasks": {"StageA": [1]}},
+        json={"session_id": graph_a, "tasks": {"StageA": [1]}},
     )
     client.post(
         "/api/push_injection_tasks",
-        json={"graph_id": graph_b, "tasks": {"StageB": [2]}},
+        json={"session_id": graph_b, "tasks": {"StageB": [2]}},
     )
 
-    pulled_a = client.get(f"/api/pull_injection?graph_id={graph_a}").json()
-    pulled_b = client.get(f"/api/pull_injection?graph_id={graph_b}").json()
+    pulled_a = client.get(f"/api/pull_injection?session_id={graph_a}").json()
+    pulled_b = client.get(f"/api/pull_injection?session_id={graph_b}").json()
 
     assert pulled_a == {"tasks": {"StageA": [1]}, "terminations": []}
     assert pulled_b == {"tasks": {"StageB": [2]}, "terminations": []}
@@ -488,24 +520,24 @@ def test_task_injection_isolated_between_sessions(client):
 
 def test_task_injection_overwrites_tasklist_per_node(client):
     """新的 push 会逐个节点更新 task list，终止符单独存储。"""
-    graph_id = "overwrite@1000"
-    _ensure_session(client, graph_id)
+    session_id = "overwrite@1000"
+    _ensure_session(client, session_id)
 
     client.post(
         "/api/push_injection_tasks",
-        json={"graph_id": graph_id, "tasks": {"StageA": [1, 2, 3]}},
+        json={"session_id": session_id, "tasks": {"StageA": [1, 2, 3]}},
     )
     client.post(
         "/api/push_injection_terminations",
-        json={"graph_id": graph_id, "nodes": ["StageB"]},
+        json={"session_id": session_id, "nodes": ["StageB"]},
     )
 
     client.post(
         "/api/push_injection_tasks",
-        json={"graph_id": graph_id, "tasks": {"StageA": [9], "StageC": ["new"]}},
+        json={"session_id": session_id, "tasks": {"StageA": [9], "StageC": ["new"]}},
     )
 
-    pull_resp = client.get(f"/api/pull_injection?graph_id={graph_id}")
+    pull_resp = client.get(f"/api/pull_injection?session_id={session_id}")
 
     assert pull_resp.status_code == 200
     assert pull_resp.json() == {
@@ -519,10 +551,10 @@ def test_task_injection_overwrites_tasklist_per_node(client):
 
 def test_task_injection_requires_tasklist_mapping(client):
     """任务注入接口要求每个节点值都是任务列表数组。"""
-    graph_id = "badlist@1000"
-    _ensure_session(client, graph_id)
+    session_id = "badlist@1000"
+    _ensure_session(client, session_id)
     invalid_payload = {
-        "graph_id": graph_id,
+        "session_id": session_id,
         "tasks": {"StageA": {"user_id": 1}},
     }
 
@@ -533,11 +565,11 @@ def test_task_injection_requires_tasklist_mapping(client):
 
 def test_termination_injection_requires_string_array(client):
     """终止符注入接口要求节点列表为字符串数组。"""
-    graph_id = "badterm@1000"
-    _ensure_session(client, graph_id)
+    session_id = "badterm@1000"
+    _ensure_session(client, session_id)
     response = client.post(
         "/api/push_injection_terminations",
-        json={"graph_id": graph_id, "nodes": {"StageA": True}},
+        json={"session_id": session_id, "nodes": {"StageA": True}},
     )
 
     assert response.status_code == 422
@@ -547,17 +579,17 @@ def test_injection_unknown_session_returns_409(client):
     """向未建立会话投递注入时应返回 409，而不是静默丢失。"""
     response = client.post(
         "/api/push_injection_tasks",
-        json={"graph_id": "ghost@1000", "tasks": {"StageA": [1]}},
+        json={"session_id": "ghost@1000", "tasks": {"StageA": [1]}},
     )
 
     assert response.status_code == 409
-    assert response.json()["error"] == "unknown graph_id"
+    assert response.json()["error"] == "unknown session_id"
 
 
 def test_errors_pagination(client):
     """测试错误日志分页与过滤 API：验证后端对错误记录的聚合与分页逻辑是否正确"""
-    graph_id = "demo@1000"
-    state = _ensure_session(client, graph_id)
+    session_id = "demo@1000"
+    state = _ensure_session(client, session_id)
     assert state["has_graph_meta"] is False
 
     # 1. 模拟推送错误数据
@@ -577,14 +609,14 @@ def test_errors_pagination(client):
     client.post(
         "/api/push_errors",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "errors": test_errors,
         },
     )
 
     # 2. 测试分页（第一页，每页10条）
     resp_p1 = client.get(
-        f"/api/pull_errors?graph_id={graph_id}&page=1&page_size=10"
+        f"/api/pull_errors?session_id={session_id}&page=1&page_size=10"
     )
     data_p1 = resp_p1.json()
     assert data_p1["total"] == 15
@@ -595,26 +627,26 @@ def test_errors_pagination(client):
     assert data_p1["data"][0]["task_json"] == {"value": 14, "label": "task14"}
 
     # 3. 测试过滤 (node=s0)
-    resp_filter = client.get(f"/api/pull_errors?graph_id={graph_id}&node=s0")
+    resp_filter = client.get(f"/api/pull_errors?session_id={session_id}&node=s0")
     data_filter = resp_filter.json()
     # 0, 2, 4, 6, 8, 10, 12, 14 -> 8条
     assert data_filter["total"] == 8
 
     # 4. 测试关键词过滤（任务名与错误字段都可命中）
-    resp_keyword = client.get(f"/api/pull_errors?graph_id={graph_id}&keyword=task12")
+    resp_keyword = client.get(f"/api/pull_errors?session_id={session_id}&keyword=task12")
     data_keyword = resp_keyword.json()
     assert data_keyword["total"] == 1
     assert data_keyword["data"][0]["event_id"] == 12
 
     resp_error_keyword = client.get(
-        f"/api/pull_errors?graph_id={graph_id}&keyword=typeerror"
+        f"/api/pull_errors?session_id={session_id}&keyword=typeerror"
     )
     data_error_keyword = resp_error_keyword.json()
     assert data_error_keyword["total"] == 7
 
     # 5. 测试排序（最旧优先）
     resp_oldest = client.get(
-        f"/api/pull_errors?graph_id={graph_id}&sort_order=oldest&page_size=5"
+        f"/api/pull_errors?session_id={session_id}&sort_order=oldest&page_size=5"
     )
     data_oldest = resp_oldest.json()
     assert data_oldest["sort_order"] == "oldest"
@@ -624,8 +656,8 @@ def test_errors_pagination(client):
 
 def test_pull_error_type_counts(client):
     """测试错误类型聚合 API：支持全部节点、单节点和缓存命中。"""
-    graph_id = "demo@1001"
-    state = _ensure_session(client, graph_id)
+    session_id = "demo@1001"
+    state = _ensure_session(client, session_id)
     assert state["has_graph_meta"] is False
 
     test_errors = [
@@ -660,12 +692,12 @@ def test_pull_error_type_counts(client):
     client.post(
         "/api/push_errors",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "errors": test_errors,
         },
     )
 
-    resp_all = client.get(f"/api/pull_error_type_counts?graph_id={graph_id}")
+    resp_all = client.get(f"/api/pull_error_type_counts?session_id={session_id}")
     assert resp_all.status_code == 200
     all_data = resp_all.json()
     assert all_data["data"] == [
@@ -673,7 +705,7 @@ def test_pull_error_type_counts(client):
         {"error_type": "TypeError", "count": 1},
     ]
 
-    resp_node = client.get(f"/api/pull_error_type_counts?graph_id={graph_id}&node=s1")
+    resp_node = client.get(f"/api/pull_error_type_counts?session_id={session_id}&node=s1")
     assert resp_node.status_code == 200
     node_data = resp_node.json()
     assert node_data["data"] == [
@@ -683,15 +715,15 @@ def test_pull_error_type_counts(client):
 
     rev = node_data["rev"]
     resp_cached = client.get(
-        f"/api/pull_error_type_counts?graph_id={graph_id}&node=s1&known_rev={rev}"
+        f"/api/pull_error_type_counts?session_id={session_id}&node=s1&known_rev={rev}"
     )
     assert resp_cached.status_code == 200
     assert resp_cached.json()["data"] is None
 
 
 def test_push_errors_appends_for_same_graph(client):
-    """相同 graph_id 下，push_errors 只追加新错误。"""
-    graph_id = "demo@2000"
+    """相同 session_id 下，push_errors 只追加新错误。"""
+    session_id = "demo@2000"
 
     first_batch = [
         {
@@ -725,45 +757,45 @@ def test_push_errors_appends_for_same_graph(client):
         }
     ]
 
-    state = _ensure_session(client, graph_id)
+    state = _ensure_session(client, session_id)
     assert state["has_graph_meta"] is False
 
-    analysis_resp = _push_graph_meta(client, graph_id)
+    analysis_resp = _push_graph_meta(client, session_id)
     assert analysis_resp.status_code == 200
     assert analysis_resp.json() == {"ok": True}
 
     response = client.post(
         "/api/push_errors",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "errors": first_batch,
         },
     )
     assert response.status_code == 200
     assert response.json() == {"ok": True}
 
-    state = _ensure_session(client, graph_id)
+    state = _ensure_session(client, session_id)
     assert state["max_event_id_in_fail"] == 2
     assert state["has_graph_meta"] is True
 
     response = client.post(
         "/api/push_errors",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "errors": second_batch,
         },
     )
     assert response.status_code == 200
     assert response.json() == {"ok": True}
 
-    pulled = client.get(f"/api/pull_errors?graph_id={graph_id}&page=1&page_size=10").json()
+    pulled = client.get(f"/api/pull_errors?session_id={session_id}&page=1&page_size=10").json()
     assert pulled["total"] == 3
     assert [item["event_id"] for item in pulled["data"]] == [3, 2, 1]
 
 
 def test_push_errors_duplicate_append_is_idempotent(client):
     """重复追加相同 event_id 时，错误缓存不应出现重复行。"""
-    graph_id = "demo@3000"
+    session_id = "demo@3000"
     duplicated_batch = [
         {
             "event_id": 1,
@@ -776,20 +808,20 @@ def test_push_errors_duplicate_append_is_idempotent(client):
         }
     ]
 
-    client.get(f"/api/pull_server_state?graph_id={graph_id}")
-    assert _push_graph_meta(client, graph_id).status_code == 200
+    client.get(f"/api/pull_server_state?session_id={session_id}")
+    assert _push_graph_meta(client, session_id).status_code == 200
 
     first = client.post(
         "/api/push_errors",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "errors": duplicated_batch,
         },
     )
     second = client.post(
         "/api/push_errors",
         json={
-            "graph_id": graph_id,
+            "session_id": session_id,
             "errors": duplicated_batch,
         },
     )
@@ -797,7 +829,7 @@ def test_push_errors_duplicate_append_is_idempotent(client):
     assert first.status_code == 200
     assert second.status_code == 200
 
-    pulled = client.get(f"/api/pull_errors?graph_id={graph_id}&page=1&page_size=10").json()
+    pulled = client.get(f"/api/pull_errors?session_id={session_id}&page=1&page_size=10").json()
     assert pulled["total"] == 1
     assert [item["event_id"] for item in pulled["data"]] == [1]
 
@@ -815,7 +847,7 @@ def test_sessions_are_isolated_and_coexist(client):
     client.post(
         "/api/push_errors",
         json={
-            "graph_id": graph_a,
+            "session_id": graph_a,
             "errors": [
                 {
                     "event_id": 1,
@@ -830,8 +862,8 @@ def test_sessions_are_isolated_and_coexist(client):
         },
     )
 
-    pulled_a = client.get(f"/api/pull_errors?graph_id={graph_a}&page=1&page_size=10").json()
-    pulled_b = client.get(f"/api/pull_errors?graph_id={graph_b}&page=1&page_size=10").json()
+    pulled_a = client.get(f"/api/pull_errors?session_id={graph_a}&page=1&page_size=10").json()
+    pulled_b = client.get(f"/api/pull_errors?session_id={graph_b}&page=1&page_size=10").json()
 
     assert pulled_a["total"] == 1
     assert pulled_b["total"] == 0
@@ -850,69 +882,75 @@ def test_pull_sessions_lists_all_sessions(client):
     _ensure_session(client, graph_a)
     _ensure_session(client, graph_b)
 
-    by_id = {item["graph_id"]: item for item in client.get("/api/pull_sessions").json()}
+    by_id = {item["session_id"]: item for item in client.get("/api/pull_sessions").json()}
     assert {graph_a, graph_b} <= set(by_id)
-    # graph_meta 未到达前，以 graph_id 占位。
+    # graph_meta 未到达前，以 session_id 占位。
     assert by_id[graph_a]["name"] == graph_a
     assert by_id[graph_a]["alive"] is True
     assert by_id[graph_a]["created_at"] > 0
 
     # 推送携带 analysis.name 的 graph_meta 后，显示名被补齐。
     assert _push_graph_meta(client, graph_a, name="list_a_named").status_code == 200
-    by_id = {item["graph_id"]: item for item in client.get("/api/pull_sessions").json()}
+    by_id = {item["session_id"]: item for item in client.get("/api/pull_sessions").json()}
     assert by_id[graph_a]["name"] == "list_a_named"
 
 
 def test_shutdown_session_marks_not_alive(client):
     """shutdown_session 将会话标记为已结束，但保留其数据。"""
-    graph_id = "shutdown@1000"
-    _ensure_session(client, graph_id)
-    assert _push_graph_meta(client, graph_id).status_code == 200
+    session_id = "shutdown@1000"
+    _ensure_session(client, session_id)
+    assert _push_graph_meta(client, session_id).status_code == 200
 
-    resp = client.post("/api/shutdown_session", json={"graph_id": graph_id})
+    resp = client.post("/api/shutdown_session", json={"session_id": session_id})
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
 
-    state = _ensure_session(client, graph_id)
+    state = _ensure_session(client, session_id)
     assert state["alive"] is False
     # 数据仍然保留，可继续拉取。
     assert state["has_graph_meta"] is True
 
-    sessions = {item["graph_id"]: item for item in client.get("/api/pull_sessions").json()}
-    assert sessions[graph_id]["alive"] is False
-    assert sessions[graph_id]["shutdown_reason"] == "reporter_stopped"
+    sessions = {item["session_id"]: item for item in client.get("/api/pull_sessions").json()}
+    assert sessions[session_id]["alive"] is False
+    assert sessions[session_id]["shutdown_reason"] == "reporter_stopped"
 
 
 def test_shutdown_unknown_session_returns_409(client):
     """对不存在的会话发送 shutdown 应返回 409。"""
-    resp = client.post("/api/shutdown_session", json={"graph_id": "ghost@1000"})
+    resp = client.post("/api/shutdown_session", json={"session_id": "ghost@1000"})
     assert resp.status_code == 409
 
 
 def test_remove_session_drops_data_and_unknown_afterwards(client):
     """remove_session 彻底移除会话，之后的拉取与 push 都视为未知会话。"""
-    graph_id = "removed@1000"
-    _ensure_session(client, graph_id)
-    assert _push_graph_meta(client, graph_id).status_code == 200
+    session_id = "removed@1000"
+    _ensure_session(client, session_id)
+    assert _push_graph_meta(client, session_id).status_code == 200
 
-    remove_resp = client.post("/api/remove_session", json={"graph_id": graph_id})
+    remove_resp = client.post("/api/remove_session", json={"session_id": session_id})
     assert remove_resp.status_code == 200
     assert remove_resp.json() == {"ok": True}
 
-    # 会话已不存在：拉取返回 404，push 返回 409。
-    assert client.get(f"/api/pull_status?graph_id={graph_id}").status_code == 404
-    assert _push_graph_meta(client, graph_id).status_code == 409
+    # 会话已不存在：拉取返回 404，数据 push 返回 409。
+    assert client.get(f"/api/pull_status?session_id={session_id}").status_code == 404
+    assert (
+        client.post(
+            "/api/push_status",
+            json={"session_id": session_id, "timestamp": 1.0, "status": {"s1": {"status": 0}}},
+        ).status_code
+        == 409
+    )
 
     # 重复移除返回 404。
-    assert client.post("/api/remove_session", json={"graph_id": graph_id}).status_code == 404
+    assert client.post("/api/remove_session", json={"session_id": session_id}).status_code == 404
 
 
 def test_unknown_session_pulls_return_404(client):
     """未建立会话时，各前端拉取接口应返回 404 而非 500。"""
-    assert client.get("/api/pull_status?graph_id=ghost@1000").status_code == 404
-    assert client.get("/api/pull_graph_meta?graph_id=ghost@1000").status_code == 404
-    assert client.get("/api/pull_errors?graph_id=ghost@1000").status_code == 404
+    assert client.get("/api/pull_status?session_id=ghost@1000").status_code == 404
+    assert client.get("/api/pull_graph_meta?session_id=ghost@1000").status_code == 404
+    assert client.get("/api/pull_errors?session_id=ghost@1000").status_code == 404
     assert (
-        client.get("/api/pull_error_type_counts?graph_id=ghost@1000").status_code == 404
+        client.get("/api/pull_error_type_counts?session_id=ghost@1000").status_code == 404
     )
-    assert client.get("/api/pull_injection?graph_id=ghost@1000").status_code == 404
+    assert client.get("/api/pull_injection?session_id=ghost@1000").status_code == 404

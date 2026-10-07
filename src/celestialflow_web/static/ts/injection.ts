@@ -620,7 +620,7 @@ async function handleInjectTermination(): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        graph_id: getActiveGraphId(),
+        session_id: getActiveGraphId(),
         nodes: [targetNode],
       }),
     });
@@ -702,7 +702,7 @@ async function handleSubmit(): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        graph_id: getActiveGraphId(),
+        session_id: getActiveGraphId(),
         tasks: payload,
       }),
     });

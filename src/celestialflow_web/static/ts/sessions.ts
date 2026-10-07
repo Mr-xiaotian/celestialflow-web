@@ -1,7 +1,7 @@
 /**
  * 会话管理模块
  *
- * 服务端按 graph_id 维护多个任务图运行实例会话，本模块负责：
+ * 服务端按 session_id 维护多个任务图运行实例会话，本模块负责：
  * - 定期拉取会话列表（`/api/pull_sessions`），维护当前选中的会话
  * - 渲染 header 中的会话选择器并处理切换
  * - 切换会话时广播事件，供各数据模块重置自身累积状态
@@ -16,7 +16,7 @@ import type { GraphSession } from "./types.js";
 /** 会话列表拉取间隔（毫秒），比状态轮询更慢，避免无谓请求。 */
 const SESSIONS_POLL_INTERVAL = 5000;
 
-/** 切换会话时广播的事件名，payload 为新选中的 graph_id。 */
+/** 切换会话时广播的事件名，payload 为新选中的 session_id。 */
 export const SESSION_SWITCH_EVENT = "cf:session-switch";
 
 /** 会话列表变化时广播的事件名，供选择器以外的模块感知。 */
@@ -28,14 +28,14 @@ let activeGraphId: string | null = null; // 当前选中的会话标识，null �
 let sessionsFetched = false; // 是否已完成首次拉取，用于区分"空列表"与"尚未拉取"
 let sessionsTimer: ReturnType<typeof setInterval> | null = null;
 let requestSeq = 0; // 请求序号，防止慢响应覆盖新结果
-let lastSelectorKey = ""; // 选择器结构投影键（graph_id/name/alive），用于避免心跳更新时无谓重建 <select>
+let lastSelectorKey = ""; // 选择器结构投影键（session_id/name/alive），用于避免心跳更新时无谓重建 <select>
 
 /**
  * 读取当前选中的会话标识。
  *
  * 数据模块在所有请求中携带该值；为空时服务端会返回 404，页面显示空态。
  *
- * @returns {string | null} 当前会话的 graph_id，未选中时为 null
+ * @returns {string | null} 当前会话的 session_id，未选中时为 null
  */
 export function getActiveGraphId(): string | null {
   return activeGraphId;
@@ -48,21 +48,21 @@ export function getActiveGraphId(): string | null {
  */
 export function getActiveSession(): GraphSession | null {
   if (!activeGraphId) return null;
-  return sessions.find((session) => session.graph_id === activeGraphId) ?? null;
+  return sessions.find((session) => session.session_id === activeGraphId) ?? null;
 }
 
 /**
- * 为带 graph_id 的接口构造查询参数。
+ * 为带 session_id 的接口构造查询参数。
  *
  * @param {Record<string, string | number>} [extra={}] - 额外查询参数
- * @returns {string} 形如 `graph_id=xxx&known_rev=-1` 的查询串；无会话时仅含额外参数
+ * @returns {string} 形如 `session_id=xxx&known_rev=-1` 的查询串；无会话时仅含额外参数
  */
 export function withGraphId(
   extra: Record<string, string | number> = {},
 ): string {
   const params = new URLSearchParams();
   if (activeGraphId) {
-    params.set("graph_id", activeGraphId);
+    params.set("session_id", activeGraphId);
   }
   for (const [key, value] of Object.entries(extra)) {
     params.set(key, String(value));
@@ -75,7 +75,7 @@ export function withGraphId(
  *
  * 相同会话不会重复触发；切换后由监听方负责清空本地累积数据并重新拉取。
  *
- * @param {string} graphId - 目标会话的 graph_id
+ * @param {string} graphId - 目标会话的 session_id
  * @returns {void}
  */
 export function setActiveGraphId(graphId: string): void {
@@ -92,7 +92,7 @@ export function setActiveGraphId(graphId: string): void {
  * 移除成功后立即刷新会话列表；若被移除的正是当前会话，则切换到剩余会话中
  * 最近活跃的一个，没有剩余会话时回到空态。
  *
- * @param {string} graphId - 待移除会话的 graph_id
+ * @param {string} graphId - 待移除会话的 session_id
  * @returns {Promise<boolean>} 是否移除成功
  */
 export async function removeSession(graphId: string): Promise<boolean> {
@@ -100,7 +100,7 @@ export async function removeSession(graphId: string): Promise<boolean> {
     const res = await fetch("/api/remove_session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ graph_id: graphId }),
+      body: JSON.stringify({ session_id: graphId }),
     });
     if (!res.ok) return false;
     await loadSessions();
@@ -117,12 +117,12 @@ export async function removeSession(graphId: string): Promise<boolean> {
  * 规则：保留仍然存在的当前会话；否则选择最近活跃的会话（优先 alive）。
  *
  * @param {GraphSession[]} list - 最新会话列表
- * @returns {string | null} 应选中的 graph_id
+ * @returns {string | null} 应选中的 session_id
  */
 function resolveActiveSession(list: GraphSession[]): string | null {
   if (!list.length) return null;
 
-  if (activeGraphId && list.some((session) => session.graph_id === activeGraphId)) {
+  if (activeGraphId && list.some((session) => session.session_id === activeGraphId)) {
     return activeGraphId;
   }
 
@@ -131,7 +131,7 @@ function resolveActiveSession(list: GraphSession[]): string | null {
   const latest = pool.reduce((best, current) =>
     current.last_seen > best.last_seen ? current : best,
   );
-  return latest.graph_id;
+  return latest.session_id;
 }
 
 /**
@@ -180,7 +180,7 @@ export async function loadSessions(): Promise<boolean> {
     // 选择器只关心结构变化（会话增删、名字/存活态）与选中项变化；
     // 心跳只更新 last_seen，不应每轮重建 <select>，否则会打断正在展开的下拉框。
     const selectorKey = JSON.stringify(
-      list.map((session) => [session.graph_id, session.name, session.alive]),
+      list.map((session) => [session.session_id, session.name, session.alive]),
     );
     if (selectorKey !== lastSelectorKey || activeGraphId !== previousActive) {
       lastSelectorKey = selectorKey;
@@ -227,7 +227,7 @@ function getRemoveBtn(): HTMLButtonElement | null {
  * @returns {string} 展示文本
  */
 function formatSessionLabel(session: GraphSession): string {
-  return session.name || session.graph_id;
+  return session.name || session.session_id;
 }
 
 /**
@@ -253,10 +253,10 @@ export function renderSessionSelector(): void {
 
   select.innerHTML = sessions
     .map((session) => {
-      const selected = session.graph_id === activeGraphId ? " selected" : "";
+      const selected = session.session_id === activeGraphId ? " selected" : "";
       const deadTag = session.alive ? "" : " · " + t("session.dead");
       const label = `${formatSessionLabel(session)}${deadTag}`;
-      return `<option value="${escapeAttr(session.graph_id)}"${selected}>${escapeHtmlText(label)}</option>`;
+      return `<option value="${escapeAttr(session.session_id)}"${selected}>${escapeHtmlText(label)}</option>`;
     })
     .join("");
   select.disabled = false;
@@ -278,9 +278,9 @@ function setupSessionControls(): void {
   removeBtn?.addEventListener("click", async () => {
     const target = getActiveSession();
     if (!target) return;
-    const ok = await removeSession(target.graph_id);
+    const ok = await removeSession(target.session_id);
     if (!ok) {
-      console.warn("会话移除失败", target.graph_id);
+      console.warn("会话移除失败", target.session_id);
     }
   });
 }
