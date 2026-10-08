@@ -16,7 +16,7 @@ import { applyI18nDOM, setLang, t } from "./i18n.js";
 import { refreshInjectionLocalizedText, renderInjectionPage, renderNodeList } from "./injection.js";
 // 只做副作用：该模块自行注册布局编辑器的 DOMContentLoaded 交互，无导出。
 import "./layout_editor.js";
-import { loadGraphMeta, loadStatuses, nodeEstimates, nodeStatuses, refreshNodeEstimates, lastNodeStatuses, lastStatusTimestamp } from "./loaders.js";
+import { loadGraphMeta, loadStatuses, nodeEstimates, nodeStatuses, refreshNodeElapsed, refreshNodeEstimates, lastNodeStatuses, lastStatusTimestamp } from "./loaders.js";
 // 只做副作用：会话模块自行注册 DOMContentLoaded 拉取与选择器渲染。
 import { renderSessionSelector } from "./sessions.js";
 import { showSettingsSaveStatus, updateSettingsStatusText } from "./settings_status.js";
@@ -299,11 +299,11 @@ async function refreshAll() {
             loadErrors(), // 获取当前分页与筛选条件下的错误记录，更新 errors
             loadErrorTypeCounts(), // 获取错误类型聚合结果，更新仪表盘扇形图
         ]);
-        // 图级派生指标由前端本地估算：必须在图元信息就绪后、渲染之前统一收口。
-        if (statusesChanged || graphMetaChanged) {
-            refreshNodeEstimates();
-        }
-        // 历史曲线依赖上一步算出的 nodeEstimates，因此延后到估算完成后再记录。
+        // 已运行时长不再随载荷到达：每拍用浏览器时钟推进，节点停止后冻结。
+        refreshNodeElapsed();
+        // 图级派生指标由前端本地估算：elapsed 每拍都在走，因此每拍重算。
+        refreshNodeEstimates();
+        // 历史曲线只在状态快照真正变化时记录，避免每拍写入重复点。
         if (statusesChanged) {
             appendStatusSnapshotToHistory(lastStatusTimestamp, nodeStatuses, nodeEstimates, lastNodeStatuses);
         }
@@ -315,14 +315,15 @@ async function refreshAll() {
         if (graphMetaChanged) {
             renderAnalysisInfo(); // 左下分析信息
         }
-        // 节点状态变化会联动影响多个区域：状态卡、筛选器、注入页、折线图和汇总卡。
+        // elapsed 与派生剩余时间每拍变化，故这些视图每拍重绘。
+        renderDashboard(); // 中间节点状态卡片（含已运行/平均耗时/剩余时间）
+        updateChartData(); // 右上折线图
+        renderSummary(); // 右下汇总数据
+        // 节点集合变化才需要重建筛选器与注入页。
         if (statusesChanged) {
-            renderDashboard(); // 中间节点状态卡片
             populateNodeFilter(nodeStatuses); // 错误筛选器
             populateErrorTypeNodeFilter(nodeStatuses); // 错误类型卡片筛选器
             renderInjectionPage(); // 注入页节点列表 + 当前节点编辑区
-            updateChartData(); // 右上折线图
-            renderSummary(); // 右下汇总数据
         }
         // 错误分页与筛选结果变更后再重绘错误表格。
         if (errorsChanged) {

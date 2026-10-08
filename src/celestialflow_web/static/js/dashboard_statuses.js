@@ -4,7 +4,7 @@
  * 数据由 loaders.ts 提供，本文件只读不拉。
  */
 import { t } from "./i18n.js";
-import { graphMeta, lastNodeEstimates, lastNodeStatuses, nodeEstimates, nodeStatuses } from "./loaders.js";
+import { graphMeta, lastNodeEstimates, lastNodeStatuses, nodeElapsed, nodeEstimates, nodeStatuses } from "./loaders.js";
 import { calcRemaining } from "./util_estimators.js";
 import { escapeHtml, formatAvgTime, formatDuration, formatTimestamp, formatWithDelta, renderLabelWithTooltip, switchToErrorsTab } from "./utils.js";
 import { webConfig } from "./web_config.js";
@@ -28,14 +28,15 @@ function getDisplayPending(status, estimate) {
  * 总等待模式使用图级估算的 `total_remaining_time`；否则基于本节点自身的计数就地推算，
  * 不依赖任何额外状态。
  * @param {NodeStatus} status - 节点状态快照
+ * @param {number} elapsed - 该节点已运行秒数（前端派生）
  * @param {NodeEstimate} [estimate] - 该节点的图级派生值；图元信息就绪前可能缺失
  * @returns {number} 当前节点状态卡使用的剩余时间（秒）
  */
-function getDisplayRemainingTime(status, estimate) {
+function getDisplayRemainingTime(status, elapsed, estimate) {
     if (webConfig.dashboard.useTotalPendingInStatus) {
         return Number(estimate?.total_remaining_time || 0);
     }
-    return calcRemaining(Number(status.tasks_processed || 0), Number(status.tasks_pending || 0), Number(status.elapsed_time || 0));
+    return calcRemaining(Number(status.tasks_processed || 0), Number(status.tasks_pending || 0), elapsed);
 }
 /**
  * 获取节点状态卡当前应展示的等待标签 HTML。
@@ -156,7 +157,8 @@ export function renderDashboard() {
         const lastEstimate = lastNodeEstimates[node]; // 上一轮图级派生值
         const displayPending = getDisplayPending(data, estimate); // 当前等待值展示字段
         const lastDisplayPending = getDisplayPending(last, lastEstimate); // 上一轮等待值展示字段
-        const displayRemainingTime = getDisplayRemainingTime(data, estimate); // 当前剩余时间展示字段
+        const elapsed = nodeElapsed[node] || 0; // 该节点已运行秒数（前端派生）
+        const displayRemainingTime = getDisplayRemainingTime(data, elapsed, estimate); // 当前剩余时间展示字段
         const addSucceeded = data.tasks_succeeded - (last.tasks_succeeded || 0); // 成功数增量
         const addPending = displayPending - lastDisplayPending; // 等待数增量
         const addFailed = data.tasks_failed - (last.tasks_failed || 0); // 失败数增量
@@ -199,10 +201,10 @@ export function renderDashboard() {
             <div class="progress-header">
               <span>${t("status.completionRate")}</span>
               <span class="time-estimate">
-                <span class="elapsed">${formatElapsedDuration(data.elapsed_time, data.tasks_succeeded, data.tasks_failed, data.tasks_skipped)}</span>
+                <span class="elapsed">${formatElapsedDuration(elapsed, data.tasks_succeeded, data.tasks_failed, data.tasks_skipped)}</span>
                 &lt;
                 <span class="remaining">${formatDuration(displayRemainingTime)}</span>,
-                <span class="task-avg-time">${formatAvgTime(data.elapsed_time, data.tasks_processed)}</span>,
+                <span class="task-avg-time">${formatAvgTime(elapsed, data.tasks_processed)}</span>,
                 <span class="progress-ratio">${progressRatio}%</span>
               </span>
             </div>

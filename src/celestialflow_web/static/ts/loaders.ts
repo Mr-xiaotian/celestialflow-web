@@ -34,15 +34,20 @@ export let lastNodeEstimates: Record<string, NodeEstimate> = {}; // 上一轮派
 let statusRev = -1; // 上次拉取的数据版本号，-1 表示首次拉取全量
 let statusesRequestSeq = 0; // 请求序列号，防止旧状态响应覆盖新结果
 export let lastStatusTimestamp = 0; // 最近一次状态快照的统一时间戳，供历史曲线记录使用
+export let nodeElapsed: Record<string, number> = {}; // 各节点已运行秒数（前端按浏览器时钟派生，节点停止后冻结）
 
 // ==== 图元信息模型 ====
 export let graphMeta: GraphMeta = {
+  graph: "",
+  graph_mode: "",
+  start_time: 0,
+  class_name: "",
+  is_dag: false,
   nodes: [],
   edges: {},
   source_nodes: [],
   node_meta: {},
-  analysis: null,
-}; // 图元信息（有向图 + 节点元信息 + 分析结果）
+}; // 图元信息（有向图 + 图级静态字段 + 节点元信息）
 let graphMetaRev = -1; // 数据版本号，用于增量拉取
 let graphMetaRequestSeq = 0; // 请求序列号，防止旧图元信息响应覆盖新结果
 
@@ -59,7 +64,7 @@ export async function loadStatuses(): Promise<boolean> {
   }
   try {
     const requestSeq = ++statusesRequestSeq; // 为当前状态请求分配递增序号
-    const res = await fetch(`/api/pull_status?${withGraphId({ known_rev: statusRev })}`);
+    const res = await fetch(`/api/pull_snapshot?${withGraphId({ known_rev: statusRev })}`);
     if (!res.ok) return false;
     const body = (await res.json()) as StatusPullResponse;
     if (requestSeq !== statusesRequestSeq) return false; // 丢弃已过时请求的返回结果
@@ -77,7 +82,7 @@ export async function loadStatuses(): Promise<boolean> {
 
 /**
  * 异步加载最新的图元信息
- * 一次拉取图拓扑、节点构建期元信息与图分析结果，并更新全局变量 graphMeta
+ * 一次拉取图拓扑、图级静态字段与各节点构建期元信息，并更新全局变量 graphMeta
  * @returns {Promise<boolean>} 当版本发生变化并成功更新时返回 `true`，否则返回 `false`。
  */
 export async function loadGraphMeta(): Promise<boolean> {
@@ -118,15 +123,20 @@ function resetLoaderState(): void {
   lastNodeStatuses = {};
   nodeEstimates = {};
   lastNodeEstimates = {};
+  nodeElapsed = {};
   statusRev = -1;
   graphMetaRev = -1;
   lastStatusTimestamp = 0;
   graphMeta = {
+    graph: "",
+    graph_mode: "",
+    start_time: 0,
+    class_name: "",
+    is_dag: false,
     nodes: [],
     edges: {},
     source_nodes: [],
     node_meta: {},
-    analysis: null,
   };
 }
 
@@ -134,6 +144,28 @@ function resetLoaderState(): void {
 document.addEventListener(SESSION_SWITCH_EVENT, () => {
   resetLoaderState();
 });
+
+/**
+ * 按浏览器时钟推进各节点的已运行时长。
+ *
+ * elapsed 不再由上报载荷提供（每拍变化会破坏服务端判重），改由前端用
+ * `Date.now()` 与节点 `start_time` 现算。节点离开 RUNNING 后冻结为最后一次
+ * 见到的值，避免停止后继续增长。
+ * @returns {void}
+ */
+export function refreshNodeElapsed(): void {
+  const nowSeconds = Date.now() / 1000;
+  const next: Record<string, number> = {};
+  for (const [name, status] of Object.entries(nodeStatuses)) {
+    const previous = nodeElapsed[name] || 0;
+    const startTime = Number(status.start_time || 0);
+    const running = Number(status.status) === 1 && startTime > 0;
+    next[name] = running
+      ? Math.max(previous, nowSeconds - startTime)
+      : previous;
+  }
+  nodeElapsed = next;
+}
 
 /**
  * 基于同一快照内的原始计数与静态拓扑，刷新各节点的图级派生值
@@ -144,8 +176,7 @@ document.addEventListener(SESSION_SWITCH_EVENT, () => {
  * @returns {void}
  */
 export function refreshNodeEstimates(): void {
-  const analysis = graphMeta.analysis; // 图分析结果随图元信息一次性到达
-  if (!graphMeta.nodes.length || !analysis) {
+  if (!graphMeta.nodes.length) {
     return; // 图元信息尚未就绪
   }
 
@@ -159,7 +190,7 @@ export function refreshNodeEstimates(): void {
   }
 
   // 非 DAG 无法拓扑传播，全局待处理量退化为节点自身的待处理量
-  const totalPendingMap: CountMap = analysis.isDAG
+  const totalPendingMap: CountMap = graphMeta.is_dag
     ? calcGlobalPending(
         graphMeta.edges,
         processedMap,
@@ -176,7 +207,7 @@ export function refreshNodeEstimates(): void {
       total_remaining_time: calcRemaining(
         Number(status.tasks_processed || 0),
         totalPending,
-        Number(status.elapsed_time || 0),
+        nodeElapsed[name] || 0,
       ),
     };
   }

@@ -134,7 +134,6 @@ const translations: Record<Lang, Record<string, string>> = {
     "analysis.graphMode": "图模式",
     "analysis.graphModeHelp":
       "任务图整体的执行模式。serial 表示串行启动各节点，thread 表示用线程启动各节点，async 表示以异步方式运行整张图。",
-    "analysis.layerCount": "层级数量",
     "status.noData": "暂无节点数据",
     "status.succeeded": "成功",
     "status.pending": "等待",
@@ -305,7 +304,6 @@ const translations: Record<Lang, Record<string, string>> = {
     "analysis.graphMode": "Graph Mode",
     "analysis.graphModeHelp":
       "The execution mode of the whole graph. serial starts nodes sequentially, thread starts nodes with threads, and async runs the graph asynchronously.",
-    "analysis.layerCount": "Layer Count",
     "status.noData": "No node data",
     "status.succeeded": "Succeeded",
     "status.pending": "Pending",
@@ -476,7 +474,6 @@ const translations: Record<Lang, Record<string, string>> = {
     "analysis.graphMode": "グラフモード",
     "analysis.graphModeHelp":
       "タスクグラフ全体の実行モードです。serial は各ノードを直列に起動し、thread はスレッドで各ノードを起動し、async はグラフ全体を非同期で実行します。",
-    "analysis.layerCount": "レイヤー数",
     "status.noData": "ノードデータなし",
     "status.succeeded": "成功",
     "status.pending": "待機中",

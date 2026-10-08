@@ -32,12 +32,17 @@ export type GraphSession = {
   created_at: number; // 会话创建时间（Unix 秒）
   last_seen: number; // reporter 最近一次活跃时间（Unix 秒）
   has_graph_meta: boolean; // 服务端是否已持有该会话的图元信息
-  has_status: boolean; // 服务端是否已持有该会话的节点状态
+  has_snapshot: boolean; // 服务端是否已持有该会话的状态快照
 };
 
-// ==== 节点状态：/api/pull_status ====
+// ==== 节点状态快照：/api/pull_snapshot ====
 
-/** 节点运行时状态快照定义（与后端 payload 的字段形状一致） */
+/**
+ * 节点运行时状态快照定义（与后端 payload 字段形状一致）
+ *
+ * 不含 `elapsed_time`：该值每拍变化，会被上报方视为"内容变化"而破坏服务端判重，
+ * 改由前端按 `start_time` 与浏览器时钟派生（见 loaders.ts）。
+ */
 export type NodeStatus = {
   status: number; // 状态码：0-未运行, 1-运行中, 2-已停止
   tasks_input: number; // 输入任务总数（外部注入与上游提供之和）
@@ -48,8 +53,7 @@ export type NodeStatus = {
   tasks_skipped: number; // 被跳过而未执行的任务数
   upstream_counts: Record<string, number>; // 各上游节点传输给本节点的任务数量
   downstream_counts: Record<string, number>; // 本节点传输给各下游节点的任务数量
-  start_time: number; // 启动 Unix 时间戳
-  elapsed_time: number; // 已运行秒数
+  start_time: number; // 启动 Unix 时间戳；未启动为 0
 };
 
 export type StatusPullResponse = ApiVersionedResponse<Record<string, NodeStatus>> & {
@@ -65,29 +69,22 @@ type NodeMeta = {
   max_workers: number; // 最大并发数
 };
 
-/** 图拓扑分析结果，随图元信息一次性到达 */
-type AnalysisData = {
-  name: string; // 任务图名称
-  graphId: string; // 任务图实例唯一标识
-  startTime: number; // 任务图启动时间戳
-  className: string; // 图结构分类名称
-  isDAG: boolean; // 当前任务图是否为 DAG
-  graphMode: string; // 图级执行模式名称
-  layersDict: Record<string, unknown>; // 层级分析结果，键数量可用于统计层数
-};
-
 /**
- * 图元信息：图拓扑、各节点构建期元信息与图分析结果
+ * 图元信息：图拓扑、图级静态字段与各节点构建期元信息
  *
- * 三者由 reporter 在同一次 push 中原子写入，因此 `nodes` 非空即表示
- * 拓扑、`node_meta` 与 `analysis` 均已就绪。
+ * 全部由 reporter 在同一次 push 中原子写入，因此 `nodes` 非空即表示
+ * 拓扑、图级字段与 `node_meta` 均已就绪。
  */
 export type GraphMeta = {
+  graph: string; // 任务图名称
+  graph_mode: string; // 图级执行模式名称
+  start_time: number; // 任务图启动 Unix 时间戳
+  class_name: string; // 图结构分类名称
+  is_dag: boolean; // 当前任务图是否为 DAG
   nodes: string[]; // 全量节点名列表
   edges: Record<string, string[]>; // 有向边邻接表
   source_nodes: string[]; // 入度为 0 的源节点列表
   node_meta: Record<string, NodeMeta>; // 各节点的构建期元信息
-  analysis: AnalysisData | null; // 图分析结果；reporter 尚未推送时为 null
 };
 
 export type GraphMetaPullResponse = ApiVersionedResponse<GraphMeta>; // 图元信息拉取响应
