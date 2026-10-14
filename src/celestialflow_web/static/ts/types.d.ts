@@ -41,7 +41,7 @@ export type GraphSession = {
  * 节点运行时状态快照定义（与后端 payload 字段形状一致）
  *
  * 不含 `elapsed_time`：该值每拍变化，会被上报方视为"内容变化"而破坏服务端判重，
- * 改由前端按 `start_time` 与浏览器时钟派生（见 loaders.ts）。
+ * 改由前端按 `start_time` / `end_time` 与浏览器时钟派生（见 loaders.ts）。
  */
 export type NodeStatus = {
   status: number; // 状态码：0-未运行, 1-运行中, 2-已停止
@@ -54,6 +54,7 @@ export type NodeStatus = {
   upstream_counts: Record<string, number>; // 各上游节点传输给本节点的任务数量
   downstream_counts: Record<string, number>; // 本节点传输给各下游节点的任务数量
   start_time: number; // 启动 Unix 时间戳；未启动为 0
+  end_time: number; // 结束 Unix 时间戳；未结束为 0
 };
 
 export type StatusPullResponse = ApiVersionedResponse<Record<string, NodeStatus>> & {
@@ -79,7 +80,6 @@ export type GraphMeta = {
   graph: string; // 任务图名称
   graph_mode: string; // 图级执行模式名称
   start_time: number; // 任务图启动 Unix 时间戳
-  class_name: string; // 图结构分类名称
   is_dag: boolean; // 当前任务图是否为 DAG
   nodes: string[]; // 全量节点名列表
   edges: Record<string, string[]>; // 有向边邻接表

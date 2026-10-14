@@ -29,7 +29,7 @@ function renderLastSeenRow() {
 }
 /**
  * 渲染分析信息面板
- * 根据 graphMeta 顶层的图级静态字段展示图名称、结构类型、DAG 状态、图模式与启动时间。
+ * 根据 graphMeta 顶层的图级静态字段展示图名称、DAG 状态、图模式与启动时间。
  * @returns {void}
  */
 export function renderAnalysisInfo() {
@@ -41,7 +41,7 @@ export function renderAnalysisInfo() {
         container.innerHTML = `<div class="empty-placeholder">${t("analysis.noData")}</div>`;
         return;
     }
-    const { graph: graphName, start_time: startTime, is_dag: isDAG, graph_mode: graphMode, class_name: className, } = graphMeta; // 解构图级静态字段
+    const { graph: graphName, start_time: startTime, is_dag: isDAG, graph_mode: graphMode, } = graphMeta; // 解构图级静态字段
     const startTimeText = startTime > 0 ? formatTimestamp(startTime) : "-";
     // 统一构建分析信息内容，避免分散更新不同 DOM 节点。
     container.innerHTML = `
@@ -53,11 +53,6 @@ export function renderAnalysisInfo() {
     <div class="analysis-row">
       <span class="analysis-label">${renderLabelWithTooltip("analysis.graphMode", "analysis.graphModeHelp")}</span>
       <span class="analysis-value">${escapeHtml(graphMode)}</span>
-    </div>
-
-    <div class="analysis-row">
-      <span class="analysis-label">${renderLabelWithTooltip("analysis.structType", "analysis.structTypeHelp")}</span>
-      <span class="analysis-value">${escapeHtml(className)}</span>
     </div>
 
     <div class="analysis-row">

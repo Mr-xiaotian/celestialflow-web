@@ -22,7 +22,6 @@ export let graphMeta = {
     graph: "",
     graph_mode: "",
     start_time: 0,
-    class_name: "",
     is_dag: false,
     nodes: [],
     edges: {},
@@ -115,7 +114,6 @@ function resetLoaderState() {
         graph: "",
         graph_mode: "",
         start_time: 0,
-        class_name: "",
         is_dag: false,
         nodes: [],
         edges: {},
@@ -131,8 +129,8 @@ document.addEventListener(SESSION_SWITCH_EVENT, () => {
  * 按浏览器时钟推进各节点的已运行时长。
  *
  * elapsed 不再由上报载荷提供（每拍变化会破坏服务端判重），改由前端用
- * `Date.now()` 与节点 `start_time` 现算。节点离开 RUNNING 后冻结为最后一次
- * 见到的值，避免停止后继续增长。
+ * `Date.now()`、节点 `start_time` 与结束后的 `end_time` 现算。对已停止节点，
+ * 若后端已给出结束时间则以其精确收敛，否则退回最后一次已见值。
  * @returns {void}
  */
 export function refreshNodeElapsed() {
@@ -141,10 +139,13 @@ export function refreshNodeElapsed() {
     for (const [name, status] of Object.entries(nodeStatuses)) {
         const previous = nodeElapsed[name] || 0;
         const startTime = Number(status.start_time || 0);
+        const endTime = Number(status.end_time || 0);
         const running = Number(status.status) === 1 && startTime > 0;
         next[name] = running
             ? Math.max(previous, nowSeconds - startTime)
-            : previous;
+            : startTime > 0 && endTime > 0
+                ? Math.max(0, endTime - startTime)
+                : previous;
     }
     nodeElapsed = next;
 }

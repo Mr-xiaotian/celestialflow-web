@@ -59,7 +59,6 @@ def _empty_graph_meta() -> dict[str, Any]:
         "graph": "",
         "graph_mode": "",
         "start_time": 0.0,
-        "class_name": "",
         "is_dag": False,
         "nodes": [],
         "edges": {},

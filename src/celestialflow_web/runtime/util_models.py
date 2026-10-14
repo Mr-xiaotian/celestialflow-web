@@ -13,7 +13,6 @@ class GraphMetaModel(BaseModel):
     graph: str = ""
     graph_mode: str = ""
     start_time: float = 0.0
-    class_name: str = ""
     is_dag: bool = False
     nodes: list[str] = Field(default_factory=list)
     edges: dict[str, list[str]] = Field(default_factory=dict)
