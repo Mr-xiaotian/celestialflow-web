@@ -18,7 +18,7 @@ import { refreshInjectionLocalizedText, renderInjectionPage, renderNodeList } fr
 import "./layout_editor.js";
 import { loadGraphMeta, loadStatuses, nodeEstimates, nodeStatuses, refreshNodeElapsed, refreshNodeEstimates, lastNodeStatuses, lastStatusTimestamp } from "./loaders.js";
 // 只做副作用：会话模块自行注册 DOMContentLoaded 拉取与选择器渲染。
-import { renderSessionSelector } from "./sessions.js";
+import { SESSION_SWITCH_EVENT, renderSessionSelector } from "./sessions.js";
 import { showSettingsSaveStatus, updateSettingsStatusText } from "./settings_status.js";
 import { autoRefreshToggle, errorJumpToInjectionToggle, errorPageSizeSelect, historyLimitSelect, injectableOnlyToggle, languageSelect, refreshSelect, settingsBtn, settingsClose, settingsCurrentEmpty, settingsCurrentGroup, settingsCurrentItems, settingsCurrentLabel, settingsPanel, statusTotalPendingToggle, structureEdgeLabelSelect, tabButtons, tabContents, themeToggleBtn, } from "./dom_refs.js";
 // 全局配置与状态变量
@@ -259,6 +259,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ==== 启动流程 ====
     refreshAll(); // 启动轮询
     syncAutoRefreshTimer();
+    // 会话切换（含删除最后一个会话回到空态）后，各数据模块已清空累积状态，
+    // 这里立即拉取一轮，避免卡片空置到下一个轮询周期。首次会话列表在当前回调
+    // 之前或之后到达两种时序都安全：先到达则此时 graphId 已就绪，后到达则上面
+    // 的 refreshAll 为空转，由本次事件触发真正的首次拉取。
+    document.addEventListener(SESSION_SWITCH_EVENT, () => {
+        void refreshAll();
+    });
 });
 /**
  * 重绘全部视图区域

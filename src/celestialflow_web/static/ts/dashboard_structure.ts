@@ -7,6 +7,7 @@
 
 import { t } from "./i18n.js";
 import { graphMeta, lastNodeStatuses } from "./loaders.js";
+import { SESSION_SWITCH_EVENT } from "./sessions.js";
 import { webConfig } from "./web_config.js";
 import type { NodeStatus } from "./types.js";
 
@@ -203,3 +204,10 @@ linkStyle default stroke:#999,stroke-width:1.5px;
   // Mermaid 会扫描新容器中的源码并完成 SVG 渲染。
   window.mermaid.run();
 }
+
+// 切换会话（含删除最后一个会话回到空态）后 loaders 会清空图元信息与节点状态。
+// 结构图只在数据变更时才由 refreshAll 重绘，而空态下 loaders 永远返回“未变更”，
+// 因此这里必须主动重绘一次，否则会残留上一个会话的拓扑。
+document.addEventListener(SESSION_SWITCH_EVENT, () => {
+  renderMermaidStructure();
+});
