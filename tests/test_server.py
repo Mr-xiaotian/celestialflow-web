@@ -319,6 +319,20 @@ def test_index_page(client):
     # 验证模板是否包含关键元素
     assert 'id="dashboard"' in response.text
 
+
+def test_index_page_uses_local_vendor_assets(client):
+    """首页应从本地 static 目录加载第三方库，避免依赖外网 CDN。"""
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert '/static/vendor/chart.js' in response.text
+    assert '/static/vendor/Sortable.min.js' in response.text
+    assert "https://cdn.jsdelivr.net/npm/chart.js" not in response.text
+    assert (
+        "https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"
+        not in response.text
+    )
+
 def _module_evaluation_order(entry: str) -> list[str]:
     """按 ESM 规范近似推导从入口出发的模块求值顺序（环内已在求值的节点跳过）。"""
     js_dir = Path(static_path) / "js"
